@@ -1,7 +1,6 @@
 # This is where you build your AI for the Chess game.
 
 from joueur.base_ai import BaseAI
-import random
 from random import shuffle
 
 
@@ -115,10 +114,8 @@ class AI(BaseAI):
         promotion = ["Queen", "Knight", "Rook", "Bishop"]
         d = self.player.rank_direction
         c = self.player.color
-        can_move_2 = False
-        m = 0
 
-        for i in range(4):
+        for i in range(1, 5):
             x = p.file
             y = p.rank
 
@@ -133,15 +130,13 @@ class AI(BaseAI):
             elif i == 3:
                 y += d
                 m = 0
-            elif i == 4 and can_move_2:
-                if p.has_moved is True:
-                    continue
+            elif i == 4 and self.can_pawn_move_2(p) is True:
                 m = 0
                 y += 2 * d
+            else:
+                continue
 
-            if self.check_map(x, y) == m:
-                if i == 3:
-                    can_move_2 = True
+            if self.check_map(x, y) == m and self.move_cause_check(p, x, y) is False:
                 if self.check_pawn_promotion(y, c):
                     for promo in promotion:
                         moves.append((p, x, y, promo))
@@ -149,6 +144,18 @@ class AI(BaseAI):
                     moves.append((p, x, y))
 
         return moves
+
+    def can_pawn_move_2(self, p):
+        if p.has_moved is True:
+            return False
+        if self.player.color == "White" and p.rank != 2:
+            return False
+        elif self.player.color == "Black" and p.rank != 7:
+            return False
+        elif self.check_map(p.file, p.rank + self.player.rank_direction) == 0:
+            return True
+
+        return False
 
     def check_pawn_promotion(self, r, c):
         if c == "White" and r == 8:
@@ -181,7 +188,7 @@ class AI(BaseAI):
     def get_moves_for_knight(self, k):
         moves = []
 
-        for i in range(8):
+        for i in range(1, 9):
             x = k.file
             y = k.rank
 
@@ -211,7 +218,7 @@ class AI(BaseAI):
                 y -= 1
 
             m = self.check_map(x, y)
-            if m == 0 or m == 2:
+            if m == 0 or m == 2 and self.move_cause_check(k, x, y) is False:
                 moves.append((k, x, y))
 
         return moves
@@ -255,9 +262,8 @@ class AI(BaseAI):
 
     def get_moves_for_king(self, k):
         moves = []
-        c = self.player.color
 
-        for i in range(8):
+        for i in range(1, 9):
             x = k.file
             y = k.rank
 
@@ -282,33 +288,44 @@ class AI(BaseAI):
                 x = self.dec_char(x)
                 y += 1
 
-            if self.check_king_move(x, y):
+            m = self.check_map(x, y)
+            if m == 0 or m == 2 and self.check_attack(x, y) is False:
                 moves.append((k, x, y))
 
         return moves
 
-    def check_king_move(self, f, r):
-        if self.check_map(f, r) == 0 or self.check_map(f, r) == 2:
-            if self.check_attack(f, r) is False:
-                return True
-        return False
+    def get_castle_moves(self):
+        kings = [x for x in self.player.pieces if x.type == "King"]
+        rooks = [x for x in self.player.pieces if x.type == "Rook"]
+        castle_moves = []
+
+        for k in kings:
+            for r in rooks:
+                if self.check_castle_move(k, r, L):
+                    pass
+
+    def check_castle_move(self, k, r, d):
+        if k.has_moved or r.has_moved:
+            return False
+
+        s = self.get_spaces_from_point(k.file, k.rank, d)
 
     def check_attack(self, f, r):
-        if self.check_attack_direction(f, r, "U"):
+        if self.check_attack_direction(f, r, 'U'):
             return True
-        if self.check_attack_direction(f, r, "D"):
+        if self.check_attack_direction(f, r, 'D'):
             return True
-        if self.check_attack_direction(f, r, "L"):
+        if self.check_attack_direction(f, r, 'L'):
             return True
-        if self.check_attack_direction(f, r, "R"):
+        if self.check_attack_direction(f, r, 'R'):
             return True
-        if self.check_attack_direction(f, r, "UL"):
+        if self.check_attack_direction(f, r, 'UL'):
             return True
-        if self.check_attack_direction(f, r, "UR"):
+        if self.check_attack_direction(f, r, 'UR'):
             return True
-        if self.check_attack_direction(f, r, "DL"):
+        if self.check_attack_direction(f, r, 'DL'):
             return True
-        if self.check_attack_direction(f, r, "DR"):
+        if self.check_attack_direction(f, r, 'DR'):
             return True
 
         if self.check_attack_knight(f, r):
@@ -331,7 +348,8 @@ class AI(BaseAI):
 
         x = f
         y = r
-        for i in range(s):
+        print("Check Attack: " + x + str(y))
+        for i in range(1, s + 1):
             if 'U' in d:
                 y += 1
             if 'D' in d:
@@ -342,53 +360,62 @@ class AI(BaseAI):
                 x = self.inc_char(x)
 
             m = self.check_map(x, y)
+            print(str(x) + ',' + str(y))
             if m == 2:
                 p = self.access_map(x, y)
+                print(str(i) + "------------------------------" + p + ": " + str(x) + ',' + str(y))
                 if len(d) == 1:
                     if i == 1 and p in straight_pieces_1:
                         return True
                     elif p in straight_pieces:
                         return True
+                    else:
+                        return False
 
                 elif len(d) == 2:
                     if i == 1 and p in diagonal_pieces_1:
                         return True
                     elif p in diagonal_pieces:
                         return True
+                    else:
+                        return False
+            if m == 1:
+                return False
 
         return False
 
     def check_attack_knight(self, f, r):
-        for i in range(8):
+        for i in range(1, 9):
             x = f
             y = r
 
             if i == 1:
+                x = self.dec_char(x, 2)
                 y += 1
             elif i == 2:
-                x = self.inc_char(x)
-                y += 1
+                x = self.dec_char(x)
+                y += 2
             elif i == 3:
                 x = self.inc_char(x)
+                y += 2
             elif i == 4:
-                x = self.inc_char(x)
-                y -= 1
+                x = self.inc_char(x, 2)
+                y += 1
             elif i == 5:
+                x = self.inc_char(x, 2)
                 y -= 1
             elif i == 6:
-                x = self.dec_char(x)
-                y -= 1
+                x = self.inc_char(x)
+                y -= 2
             elif i == 7:
                 x = self.dec_char(x)
+                y -= 2
             elif i == 8:
-                x = self.dec_char(x)
-                y += 1
+                x = self.dec_char(x, 2)
+                y -= 1
 
-            m = self.check_map(x, y)
-            if m == 2:
-                piece = self.access_map(x, y)
-                if self.is_enemy(piece) and piece in "Nn":
-                    return True
+            if self.check_map(x, y) == 2 and self.access_map(x, y) in 'Nn':
+                return True
 
         return False
 
@@ -402,31 +429,61 @@ class AI(BaseAI):
 
         moves = []
 
-        c = self.player.color
         x = p.file
         y = p.rank
-        for _ in range(s):
-            if "U" in d:
+        for _ in range(1, s + 1):
+            if 'U' in d:
                 y += 1
-            if "D" in d:
+            if 'D' in d:
                 y -= 1
-            if "L" in d:
+            if 'L' in d:
                 x = self.dec_char(x)
-            if "R" in d:
+            if 'R' in d:
                 x = self.inc_char(x)
 
             m = self.check_map(x, y)
-            if m == 0:
+            if m == 0 and self.move_cause_check(p, x, y) is False:
                 moves.append((p, x, y))
-            elif m > 0:
-                if m == 1:
-                    return moves
-                elif m == 2:
-                    moves.append((p, x, y))
-                    return moves
+            elif m == 1:
+                return moves
+            elif m == 2 and self.move_cause_check(p, x, y) is False:
+                moves.append((p, x, y))
+                return moves
 
         return moves
 
+    def is_check(self):
+        kings = [x for x in self.player.pieces if x.type == "King"]
+
+        for k in kings:
+            if self.check_attack(k.file, k.rank):
+                return True
+
+    def move_cause_check(self, piece, f, r):
+        check = False
+
+        x = self.convert_file_to_map_x(piece.file)
+        y = self.convert_rank_to_map_y(piece.rank)
+        p = self._collision_map[y][x]
+        self._collision_map[y][x] = ' '
+
+        x = self.convert_file_to_map_x(f)
+        y = self.convert_rank_to_map_y(r)
+        tmp_p = self._collision_map[y][x]
+        self._collision_map[y][x] = p
+
+        if self.is_check():
+            check = True
+
+        x = self.convert_file_to_map_x(piece.file)
+        y = self.convert_rank_to_map_y(piece.rank)
+        self._collision_map[y][x] = p
+
+        x = self.convert_file_to_map_x(f)
+        y = self.convert_rank_to_map_y(r)
+        self._collision_map[y][x] = tmp_p
+
+        return check
 
     def get_checkmate_moves(self):
         checkmate_moves = []
@@ -467,7 +524,6 @@ class AI(BaseAI):
     # Post: Returns -1 if f and r are not valid positions, 0 if the position is empty, 1 if the position contains a
     #       friendly piece, 2 if the position contains a enemies piece.
     def check_map(self, f, r):
-        c = self.player.color
         if f not in "abcdefgh" or r < 1 or r > 8:
             return -1
 
