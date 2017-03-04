@@ -68,14 +68,14 @@ class AI(BaseAI):
         #    4) makes a random (and probably invalid) move.
 
         # 1) print the board to the console
-        self.print_current_board()
+        #self.print_current_board()
 
         # 2) print the opponent's last move to the console
-        if len(self.game.moves) > 0:
-            print("Opponent's Last Move: '" + self.game.moves[-1].san + "'")
+        #if len(self.game.moves) > 0:
+            #print("Opponent's Last Move: '" + self.game.moves[-1].san + "'")
 
         # 3) print how much time remaining this AI has to calculate moves
-        print("Time Remaining: " + str(self.player.time_remaining) + " ns")
+        #print("Time Remaining: " + str(self.player.time_remaining) + " ns")
 
         # 4) make a random (and probably invalid) move.
 
@@ -86,20 +86,19 @@ class AI(BaseAI):
 
         return True  # to signify we are done with our turn.
 
+    # -----------------------------Moves-------------------------
     def get_possible_moves(self):
         moves = []
-        if self.player.in_check is False:
-            moves += self.get_pawn_moves()
-            moves += self.get_rook_moves()
-            moves += self.get_knight_moves()
-            moves += self.get_bishop_moves()
-            moves += self.get_queen_moves()
-            moves += self.get_king_moves()
-        else:
-            moves = self.get_checkmate_moves()
+        moves += self.get_pawn_moves()
+        moves += self.get_rook_moves()
+        #moves += self.get_knight_moves()
+        #moves += self.get_bishop_moves()
+        #moves += self.get_queen_moves()
+        moves += self.get_king_moves()
 
         return moves
 
+    # ----------------------------Pawns----------------------------
     def get_pawn_moves(self):
         pawns = [x for x in self.player.pieces if x.type == "Pawn"]
         pawn_moves = []
@@ -136,12 +135,13 @@ class AI(BaseAI):
             else:
                 continue
 
-            if self.check_map(x, y) == m and self.move_cause_check(p, x, y) is False:
-                if self.check_pawn_promotion(y, c):
-                    for promo in promotion:
-                        moves.append((p, x, y, promo))
-                else:
-                    moves.append((p, x, y))
+            if self.check_map(x, y) == m:
+                if self.move_cause_check(p, x, y) is False:
+                    if self.check_pawn_promotion(y, c):
+                        for promo in promotion:
+                            moves.append((p, x, y, promo))
+                    else:
+                        moves.append((p, x, y))
 
         return moves
 
@@ -164,6 +164,7 @@ class AI(BaseAI):
             return True
         return False
 
+    # ------------------------Rooks---------------------------------
     def get_rook_moves(self):
         rooks = [x for x in self.player.pieces if x.type == "Rook"]
         rook_moves = []
@@ -176,6 +177,7 @@ class AI(BaseAI):
 
         return rook_moves
 
+    # -------------------------Knights--------------------------------
     def get_knight_moves(self):
         knights = [x for x in self.player.pieces if x.type == "Knight"]
         knight_moves = []
@@ -218,11 +220,13 @@ class AI(BaseAI):
                 y -= 1
 
             m = self.check_map(x, y)
-            if m == 0 or m == 2 and self.move_cause_check(k, x, y) is False:
-                moves.append((k, x, y))
+            if m == 0 or m == 2:
+                if self.move_cause_check(k, x, y) is False:
+                    moves.append((k, x, y))
 
         return moves
 
+    # -----------------------------Bishops------------------------------
     def get_bishop_moves(self):
         bishops = [x for x in self.player.pieces if x.type == "Bishop"]
         bishop_moves = []
@@ -235,6 +239,7 @@ class AI(BaseAI):
 
         return bishop_moves
 
+    # ---------------------------------Queen-----------------------------
     def get_queen_moves(self):
         queens = [x for x in self.player.pieces if x.type == "Queen"]
         queen_moves = []
@@ -251,6 +256,7 @@ class AI(BaseAI):
 
         return queen_moves
 
+    # -----------------------------King--------------------------
     def get_king_moves(self):
         kings = [x for x in self.player.pieces if x.type == "King"]
         king_moves = []
@@ -289,28 +295,14 @@ class AI(BaseAI):
                 y += 1
 
             m = self.check_map(x, y)
-            if m == 0 or m == 2 and self.check_attack(x, y) is False:
-                moves.append((k, x, y))
+            if m == 0 or m == 2:
+                if self.check_attack(x, y) is False:
+                    moves.append((k, x, y))
 
         return moves
 
-    def get_castle_moves(self):
-        kings = [x for x in self.player.pieces if x.type == "King"]
-        rooks = [x for x in self.player.pieces if x.type == "Rook"]
-        castle_moves = []
-
-        for k in kings:
-            for r in rooks:
-                if self.check_castle_move(k, r, L):
-                    pass
-
-    def check_castle_move(self, k, r, d):
-        if k.has_moved or r.has_moved:
-            return False
-
-        s = self.get_spaces_from_point(k.file, k.rank, d)
-
     def check_attack(self, f, r):
+        #print("Check Attack from: " + str(f) + str(r))
         if self.check_attack_direction(f, r, 'U'):
             return True
         if self.check_attack_direction(f, r, 'D'):
@@ -345,10 +337,12 @@ class AI(BaseAI):
         straight_pieces_1 = ['K', 'k']
         diagonal_pieces = ['B', 'Q', 'b', 'q']
         diagonal_pieces_1 = ['K', 'P', 'k', 'p']
+        straight_dir = ['U', 'D', 'L', 'R']
+        diagonal_dir = ['UL', 'UR', 'DL', 'DR']
 
         x = f
         y = r
-        print("Check Attack: " + x + str(y))
+        #print("  Dir: "+str(d)+":"+str(s))
         for i in range(1, s + 1):
             if 'U' in d:
                 y += 1
@@ -360,31 +354,44 @@ class AI(BaseAI):
                 x = self.inc_char(x)
 
             m = self.check_map(x, y)
-            print(str(x) + ',' + str(y))
-            if m == 2:
+            if m != -1:
                 p = self.access_map(x, y)
-                print(str(i) + "------------------------------" + p + ": " + str(x) + ',' + str(y))
-                if len(d) == 1:
+                #print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
+            if m == 1:
+                p = self.access_map(x, y)
+                # skip over king
+                if p in ['K', 'k']:
+                    continue
+                else:
+                    return False
+            elif m == 2:
+                p = self.access_map(x, y)
+                if d in straight_dir:
                     if i == 1 and p in straight_pieces_1:
+                        #print("      Return True")
                         return True
-                    elif p in straight_pieces:
+                    if p in straight_pieces:
+                        #print("      Return True")
                         return True
                     else:
                         return False
 
-                elif len(d) == 2:
+                elif d in diagonal_dir:
                     if i == 1 and p in diagonal_pieces_1:
+                        #print("      Return True")
                         return True
-                    elif p in diagonal_pieces:
+                    if p in diagonal_pieces:
+                        #print("      Return True")
                         return True
                     else:
                         return False
-            if m == 1:
-                return False
 
         return False
 
     def check_attack_knight(self, f, r):
+        exception_pieces = ['N', 'n']
+
+        #print("  Knights:")
         for i in range(1, 9):
             x = f
             y = r
@@ -414,8 +421,15 @@ class AI(BaseAI):
                 x = self.dec_char(x, 2)
                 y -= 1
 
-            if self.check_map(x, y) == 2 and self.access_map(x, y) in 'Nn':
-                return True
+            m = self.check_map(x, y)
+            if m != -1:
+                p = self.access_map(x, y)
+                #print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
+            if m == 2:
+                p = self.access_map(x, y)
+                if p in exception_pieces:
+                    #print("      Return True")
+                    return True
 
         return False
 
@@ -442,13 +456,15 @@ class AI(BaseAI):
                 x = self.inc_char(x)
 
             m = self.check_map(x, y)
-            if m == 0 and self.move_cause_check(p, x, y) is False:
-                moves.append((p, x, y))
+            if m == 0:
+                if self.move_cause_check(p, x, y) is False:
+                    moves.append((p, x, y))
             elif m == 1:
                 return moves
-            elif m == 2 and self.move_cause_check(p, x, y) is False:
-                moves.append((p, x, y))
-                return moves
+            elif m == 2:
+                if self.move_cause_check(p, x, y) is False:
+                    moves.append((p, x, y))
+                    return moves
 
         return moves
 
@@ -485,11 +501,6 @@ class AI(BaseAI):
 
         return check
 
-    def get_checkmate_moves(self):
-        checkmate_moves = []
-        checkmate_moves += self.get_king_moves()
-        return checkmate_moves
-
     def do_move(self, m):
         if len(m) == 4:
             m[0].move(m[1], m[2], m[3])
@@ -511,6 +522,8 @@ class AI(BaseAI):
                 break
 
     def update_map(self, m):
+        is_upper = False
+
         x = self.convert_file_to_map_x(m.from_file)
         y = self.convert_rank_to_map_y(m.from_rank)
         p = self._collision_map[y][x]
@@ -518,6 +531,33 @@ class AI(BaseAI):
 
         x = self.convert_file_to_map_x(m.piece.file)
         y = self.convert_rank_to_map_y(m.piece.rank)
+
+        if m.promotion != "":
+            print("Promotion From "+p)
+            is_upper = p.isupper()
+
+            if m.promotion == "Queen":
+                if is_upper:
+                    p = 'Q'
+                else:
+                    p = 'q'
+            elif m.promotion == "Rook":
+                if is_upper:
+                    p = 'R'
+                else:
+                    p = 'r'
+            elif m.promotion == "Bishop":
+                if is_upper:
+                    p = 'B'
+                else:
+                    p = 'b'
+            elif m.promotion == "Knight":
+                if is_upper:
+                    p = 'N'
+                else:
+                    p = 'n'
+            print("Promotion to "+p)
+
         self._collision_map[y][x] = p
 
     # Des: Returns a number based on the status of the collision_map at file f and rank r.
