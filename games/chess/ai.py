@@ -92,8 +92,8 @@ class AI(BaseAI):
         moves += self.get_pawn_moves()
         moves += self.get_rook_moves()
         moves += self.get_knight_moves()
-        #moves += self.get_bishop_moves()
-        #moves += self.get_queen_moves()
+        moves += self.get_bishop_moves()
+        moves += self.get_queen_moves()
         moves += self.get_king_moves()
 
         return moves
@@ -302,7 +302,7 @@ class AI(BaseAI):
         return moves
 
     def check_attack(self, f, r):
-        print("Check Attack from: " + str(f) + str(r))
+        # print("Check Attack from: " + str(f) + str(r))
         if self.check_attack_direction(f, r, 'U'):
             return True
         if self.check_attack_direction(f, r, 'D'):
@@ -342,7 +342,7 @@ class AI(BaseAI):
 
         x = f
         y = r
-        print("  Dir: "+str(d)+":"+str(s))
+        # print("  Dir: "+str(d)+":"+str(s))
         for i in range(1, s + 1):
             if 'U' in d:
                 y += 1
@@ -356,7 +356,7 @@ class AI(BaseAI):
             m = self.check_map(x, y)
             if m != -1:
                 p = self.access_map(x, y)
-                print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
+                # print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
             if m == 1:
                 p = self.access_map(x, y)
                 # skip over king
@@ -368,20 +368,20 @@ class AI(BaseAI):
                 p = self.access_map(x, y)
                 if d in straight_dir:
                     if i == 1 and p in straight_pieces_1:
-                        print("      Return True")
+                        # print("      Return True")
                         return True
                     if p in straight_pieces:
-                        print("      Return True")
+                        # print("      Return True")
                         return True
                     else:
                         return False
 
                 elif d in diagonal_dir:
                     if i == 1 and p in diagonal_pieces_1:
-                        print("      Return True")
+                        # print("      Return True")
                         return True
                     if p in diagonal_pieces:
-                        print("      Return True")
+                        # print("      Return True")
                         return True
                     else:
                         return False
@@ -391,7 +391,7 @@ class AI(BaseAI):
     def check_attack_knight(self, f, r):
         exception_pieces = ['N', 'n']
 
-        print("  Knights:")
+        # print("  Knights:")
         for i in range(1, 9):
             x = f
             y = r
@@ -424,11 +424,11 @@ class AI(BaseAI):
             m = self.check_map(x, y)
             if m != -1:
                 p = self.access_map(x, y)
-                print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
+                # print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
             if m == 2:
                 p = self.access_map(x, y)
                 if p in exception_pieces:
-                    print("      Return True")
+                    # print("      Return True")
                     return True
 
         return False
@@ -445,7 +445,8 @@ class AI(BaseAI):
 
         x = p.file
         y = p.rank
-        for _ in range(1, s + 1):
+        print("Getting Moves For: "+x+str(y)+", Move Dir: " + str(d) + ":" + str(s))
+        for i in range(1, s + 1):
             if 'U' in d:
                 y += 1
             if 'D' in d:
@@ -456,15 +457,23 @@ class AI(BaseAI):
                 x = self.inc_char(x)
 
             m = self.check_map(x, y)
+            if m != -1:
+                tmp_p = self.access_map(x, y)
+                print("    (" + str(i) + ") " + x + str(y) + ": " + tmp_p + ": " + str(self.is_enemy(tmp_p)))
             if m == 0:
                 if self.move_cause_check(p, x, y) is False:
+                    print("    Append " + x + str(y))
                     moves.append((p, x, y))
             elif m == 1:
+                print("    Return Moves")
                 return moves
             elif m == 2:
                 if self.move_cause_check(p, x, y) is False:
+                    print("    Append " + x + str(y))
                     moves.append((p, x, y))
-                    return moves
+
+                print("    Return Moves")
+                return moves
 
         return moves
 
