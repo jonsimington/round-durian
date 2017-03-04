@@ -81,8 +81,9 @@ class AI(BaseAI):
 
         # self.print_collision_map()
         possible_moves = self.get_possible_moves()
-        shuffle(possible_moves)
-        self.do_move(possible_moves[0])
+        if len(possible_moves) > 0:
+            shuffle(possible_moves)
+            self.do_move(possible_moves[0])
 
         return True  # to signify we are done with our turn.
 
@@ -90,11 +91,11 @@ class AI(BaseAI):
     def get_possible_moves(self):
         moves = []
         moves += self.get_pawn_moves()
-        moves += self.get_rook_moves()
-        moves += self.get_knight_moves()
-        moves += self.get_bishop_moves()
-        moves += self.get_queen_moves()
-        moves += self.get_king_moves()
+        #moves += self.get_rook_moves()
+        #moves += self.get_knight_moves()
+        #moves += self.get_bishop_moves()
+        #moves += self.get_queen_moves()
+        #moves += self.get_king_moves()
 
         return moves
 
@@ -143,6 +144,12 @@ class AI(BaseAI):
                     else:
                         moves.append((p, x, y))
 
+        if len(self.game.moves) > 0:
+            prev_move = self.game.moves[-1]
+            if self.can_pawn_passant(p, prev_move):
+                moves.append((p, prev_move.to_file, p.rank + d))
+                print("Can do passant")
+
         return moves
 
     def can_pawn_move_2(self, p):
@@ -164,6 +171,21 @@ class AI(BaseAI):
             return True
         return False
 
+    def can_pawn_passant(self, p, m):
+        if self.is_move_passant(m) is False:
+            return False
+        if abs(ord(p.file) - ord(m.to_file)) != 1:
+            return False
+        if abs(p.rank - m.to_rank) != 0:
+            return False
+
+        return True
+
+    def is_move_passant(self, m):
+        if m.piece.type == "Pawn" and abs(m.from_rank - m.to_rank) == 2:
+            return True
+        return False
+
     # ------------------------Rooks---------------------------------
     def get_rook_moves(self):
         rooks = [x for x in self.player.pieces if x.type == "Rook"]
@@ -174,8 +196,55 @@ class AI(BaseAI):
             rook_moves += self.get_moves_in_direction(r, 'D')
             rook_moves += self.get_moves_in_direction(r, 'L')
             rook_moves += self.get_moves_in_direction(r, 'R')
+            rook_moves += self.get_castle_moves(r)
 
         return rook_moves
+
+    def get_castle_moves(self, r):
+        kings = [x for x in self.player.pieces if x.type == "King"]
+        castle_moves = []
+
+        for k in kings:
+            f = self.castle_file(k, r)
+            if self.can_castle(k, r, f):
+                castle_moves.append((k, f, k.rank))
+
+        return castle_moves
+
+    def can_castle(self, k, r, f):
+        if k.has_moved is True or r.has_moved is True:
+            return False
+        if self.is_check():
+            return False
+
+        if r.file == 'a':
+            if self.check_map(self.dec_char(k.file), k.rank) != 0:
+                return False
+            elif self.check_map(self.dec_char(k.file, 2), k.rank) != 0:
+                return False
+            elif self.check_map(self.dec_char(k.file, 3), k.rank) != 0:
+                return False
+            elif self.check_attack(self.dec_char(k.file), k.rank):
+                return False
+            elif self.check_attack(self.dec_char(k.file, 2), k.rank):
+                return False
+        elif r.file == 'h':
+            if self.check_map(self.inc_char(k.file), k.rank) != 0:
+                return False
+            elif self.check_map(self.inc_char(k.file, 2), k.rank) != 0:
+                return False
+            elif self.check_attack(self.inc_char(k.file), k.rank):
+                return False
+            elif self.check_attack(self.inc_char(k.file, 2), k.rank):
+                return False
+
+        return True
+
+    def castle_file(self, k, r):
+        if r.file == 'a':
+            return self.dec_char(k.file, 2)
+        elif r.file == 'h':
+            return self.inc_char(k.file, 2)
 
     # -------------------------Knights--------------------------------
     def get_knight_moves(self):
@@ -445,7 +514,7 @@ class AI(BaseAI):
 
         x = p.file
         y = p.rank
-        print("Getting Moves For: "+x+str(y)+", Move Dir: " + str(d) + ":" + str(s))
+        # print("Getting Moves For: "+x+str(y)+", Move Dir: " + str(d) + ":" + str(s))
         for i in range(1, s + 1):
             if 'U' in d:
                 y += 1
@@ -459,20 +528,20 @@ class AI(BaseAI):
             m = self.check_map(x, y)
             if m != -1:
                 tmp_p = self.access_map(x, y)
-                print("    (" + str(i) + ") " + x + str(y) + ": " + tmp_p + ": " + str(self.is_enemy(tmp_p)))
+                # print("    (" + str(i) + ") " + x + str(y) + ": " + tmp_p + ": " + str(self.is_enemy(tmp_p)))
             if m == 0:
                 if self.move_cause_check(p, x, y) is False:
-                    print("    Append " + x + str(y))
+                    # print("    Append " + x + str(y))
                     moves.append((p, x, y))
             elif m == 1:
-                print("    Return Moves")
+                # print("    Return Moves")
                 return moves
             elif m == 2:
                 if self.move_cause_check(p, x, y) is False:
-                    print("    Append " + x + str(y))
+                    # print("    Append " + x + str(y))
                     moves.append((p, x, y))
 
-                print("    Return Moves")
+                # print("    Return Moves")
                 return moves
 
         return moves
