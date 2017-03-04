@@ -59,35 +59,21 @@ class AI(BaseAI):
                   function.
         """
 
-        # Here is where you'll want to code your AI.
-
-        # We've provided sample code that:
-        #    1) prints the board to the console
-        #    2) prints the opponent's last move to the console
-        #    3) prints how much time remaining this AI has to calculate moves
-        #    4) makes a random (and probably invalid) move.
-
-        # 1) print the board to the console
-        #self.print_current_board()
-
-        # 2) print the opponent's last move to the console
-        #if len(self.game.moves) > 0:
-            #print("Opponent's Last Move: '" + self.game.moves[-1].san + "'")
-
-        # 3) print how much time remaining this AI has to calculate moves
-        #print("Time Remaining: " + str(self.player.time_remaining) + " ns")
-
-        # 4) make a random (and probably invalid) move.
-
+        # getting all the possible moves and picking a random one to do
         # self.print_collision_map()
         possible_moves = self.get_possible_moves()
         if len(possible_moves) > 0:
             shuffle(possible_moves)
-            self.do_move(possible_moves[0])
+            move = possible_moves[0]
+            self.output_moves([x for x in possible_moves if x[0].id == move[0].id])
+            self.do_move(move)
 
         return True  # to signify we are done with our turn.
 
     # -----------------------------Moves-------------------------
+    # Des: Calls the functions that gets all the moves for each pieces and adds them into a list.
+    # Pre: None
+    # Post: list of moves returns that contains a tuple of the piece, the file, and the rank.
     def get_possible_moves(self):
         moves = []
         moves += self.get_pawn_moves()
@@ -100,6 +86,9 @@ class AI(BaseAI):
         return moves
 
     # ----------------------------Pawns----------------------------
+    # Des: Loops through all pawns and gets the possible moves for each pawn.
+    # Pre: None
+    # Post: list of pawn moves returned
     def get_pawn_moves(self):
         pawns = [x for x in self.player.pieces if x.type == "Pawn"]
         pawn_moves = []
@@ -109,16 +98,21 @@ class AI(BaseAI):
 
         return pawn_moves
 
+    # Des: Gets the possible moves for a specific pawn
+    # Pre: None
+    # Post: returns list of moves for the pawn passed
     def get_moves_for_pawn(self, p):
         moves = []
         promotion = ["Queen", "Knight", "Rook", "Bishop"]
         d = self.player.rank_direction
         c = self.player.color
 
+        # loops through 1-4 since there are 4 diffrent possible moves + the passant for pawns
         for i in range(1, 5):
             x = p.file
             y = p.rank
 
+            # changing the file and rank to be checked at each iteration
             if i == 1:
                 y += d
                 x = self.dec_char(x)
@@ -136,21 +130,29 @@ class AI(BaseAI):
             else:
                 continue
 
+            # checking if the file and rank set are valid moves for the pawn
             if self.check_map(x, y) == m:
+                # will move cause check?
                 if self.move_cause_check(p, x, y) is False:
+                    # can pawn be promoted?
                     if self.check_pawn_promotion(y, c):
                         for promo in promotion:
                             moves.append((p, x, y, promo))
                     else:
                         moves.append((p, x, y))
 
+        # making sure there is at least one move before checking for passant
         if len(self.game.moves) > 0:
             prev_move = self.game.moves[-1]
+            # can pawn p passant?
             if self.can_pawn_passant(p, prev_move):
                 moves.append((p, prev_move.to_file, p.rank + d))
 
         return moves
 
+    # Des: checks if pawn p can move to spaces
+    # Pre: None
+    # Post: return true if pawn can mpve 2 s[aces, false otherwise
     def can_pawn_move_2(self, p):
         if p.has_moved is True:
             return False
@@ -163,6 +165,7 @@ class AI(BaseAI):
 
         return False
 
+    # Des: checks if pawn can be promoted
     def check_pawn_promotion(self, r, c):
         if c == "White" and r == 8:
             return True
@@ -170,6 +173,7 @@ class AI(BaseAI):
             return True
         return False
 
+    # Des: checks if pawn can perform passant
     def can_pawn_passant(self, p, m):
         if self.is_move_passant(m) is False:
             return False
@@ -180,16 +184,19 @@ class AI(BaseAI):
 
         return True
 
+    # Des: checks if a move was made by a pawn and was 2 steps
     def is_move_passant(self, m):
         if m.piece.type == "Pawn" and abs(m.from_rank - m.to_rank) == 2:
             return True
         return False
 
     # ------------------------Rooks---------------------------------
+    # Des: gets all the moves for the rooks and returns them in a list
     def get_rook_moves(self):
         rooks = [x for x in self.player.pieces if x.type == "Rook"]
         rook_moves = []
 
+        # loops through all rooks
         for r in rooks:
             rook_moves += self.get_moves_in_direction(r, 'U')
             rook_moves += self.get_moves_in_direction(r, 'D')
@@ -199,23 +206,31 @@ class AI(BaseAI):
 
         return rook_moves
 
+    # Des: gets the castle moves possible for a rook
     def get_castle_moves(self, r):
         kings = [x for x in self.player.pieces if x.type == "King"]
         castle_moves = []
 
+        # looping through all kings (probably only 1)
         for k in kings:
             f = self.castle_file(k, r)
+            # can rook r castle with king k at file f?
             if self.can_castle(k, r, f):
                 castle_moves.append((k, f, k.rank))
 
         return castle_moves
 
+    # Des: checks if kings k and rook r can castle at file f.
     def can_castle(self, k, r, f):
+        # has the king or rook moved?
         if k.has_moved is True or r.has_moved is True:
             return False
+        # is the king in check?
         if self.is_check():
             return False
 
+        # checking if spaces between rook and king are clean and spaces the king must move through are not attackable
+        # left castle
         if r.file == 'a':
             if self.check_map(self.dec_char(k.file), k.rank) != 0:
                 return False
@@ -227,6 +242,8 @@ class AI(BaseAI):
                 return False
             elif self.check_attack(self.dec_char(k.file, 2), k.rank):
                 return False
+
+        # right castle
         elif r.file == 'h':
             if self.check_map(self.inc_char(k.file), k.rank) != 0:
                 return False
@@ -239,6 +256,7 @@ class AI(BaseAI):
 
         return True
 
+    # Des: returns the location of the file for the king if it castles with rook r.
     def castle_file(self, k, r):
         if r.file == 'a':
             return self.dec_char(k.file, 2)
@@ -246,6 +264,7 @@ class AI(BaseAI):
             return self.inc_char(k.file, 2)
 
     # -------------------------Knights--------------------------------
+    # Des: loops through all knighs and returns the possible moves
     def get_knight_moves(self):
         knights = [x for x in self.player.pieces if x.type == "Knight"]
         knight_moves = []
@@ -255,13 +274,16 @@ class AI(BaseAI):
 
         return knight_moves
 
+    # Des: returns the possible moves for a knight
     def get_moves_for_knight(self, k):
         moves = []
 
+        # loops through 1-8 since there are 8 possible moves for a knight
         for i in range(1, 9):
             x = k.file
             y = k.rank
 
+            # changing the file and rank for each iteration to consider moving the knight there
             if i == 1:
                 x = self.dec_char(x, 2)
                 y += 1
@@ -287,14 +309,17 @@ class AI(BaseAI):
                 x = self.dec_char(x, 2)
                 y -= 1
 
+            # checking if position is empty or holds an enemy
             m = self.check_map(x, y)
             if m == 0 or m == 2:
+                # will move cause players king to be checked
                 if self.move_cause_check(k, x, y) is False:
                     moves.append((k, x, y))
 
         return moves
 
     # -----------------------------Bishops------------------------------
+    # Des: returns a list of possible moves for all bishops.
     def get_bishop_moves(self):
         bishops = [x for x in self.player.pieces if x.type == "Bishop"]
         bishop_moves = []
@@ -308,6 +333,7 @@ class AI(BaseAI):
         return bishop_moves
 
     # ---------------------------------Queen-----------------------------
+    # Des: returns a list of possible moves for all queens.
     def get_queen_moves(self):
         queens = [x for x in self.player.pieces if x.type == "Queen"]
         queen_moves = []
@@ -325,22 +351,27 @@ class AI(BaseAI):
         return queen_moves
 
     # -----------------------------King--------------------------
+    # Des: returns a list of all possible moves for the kings
     def get_king_moves(self):
         kings = [x for x in self.player.pieces if x.type == "King"]
         king_moves = []
 
+        # looping through kings
         for k in kings:
             king_moves += self.get_moves_for_king(k)
 
         return king_moves
 
+    # Des: returns a list of all possible moves for a king
     def get_moves_for_king(self, k):
         moves = []
 
+        # loops through 1-8 since there are 8 possible moves for a king
         for i in range(1, 9):
             x = k.file
             y = k.rank
 
+            # changing file and rank for each iteration to check position
             if i == 1:
                 y += 1
             elif i == 2:
@@ -362,14 +393,19 @@ class AI(BaseAI):
                 x = self.dec_char(x)
                 y += 1
 
+            # is position empty or does it contain an enemy?
             m = self.check_map(x, y)
             if m == 0 or m == 2:
+                # can the king be attacked from this position?
                 if self.check_attack(x, y) is False:
                     moves.append((k, x, y))
 
         return moves
 
+    # Des: takes a file f and rank r, and determines if any pieces can attack this position
     def check_attack(self, f, r):
+        # checking if position can be attacked from all directions
+
         # print("Check Attack from: " + str(f) + str(r))
         if self.check_attack_direction(f, r, 'U'):
             return True
@@ -388,12 +424,16 @@ class AI(BaseAI):
         if self.check_attack_direction(f, r, 'DR'):
             return True
 
+        # checking if knights can attack position
         if self.check_attack_knight(f, r):
             return True
 
         return False
 
+    # Des: takes a file f, rank r, and a direction d, and determines if (f, r) can be attacked from the direction d.
+    # Pre: d must be U, D, L, R, UL, UR, DL, DR.
     def check_attack_direction(self, f, r, d):
+        # getting the number of spaces from (f, r) to the end of the board in the direction d
         if len(d) == 1:
             s = self.get_spaces_from_point(f, r, d)
         else:
@@ -401,6 +441,7 @@ class AI(BaseAI):
             s2 = self.get_spaces_from_point(f, r, d[1])
             s = min(s1, s2)
 
+        # used to check if a piece found when exploring in the direction d can or cannot attack the position (f, r)
         straight_pieces = ['R', 'Q', 'r', 'q']
         straight_pieces_1 = ['K', 'k']
         diagonal_pieces = ['B', 'Q', 'b', 'q']
@@ -408,6 +449,7 @@ class AI(BaseAI):
         straight_dir = ['U', 'D', 'L', 'R']
         diagonal_dir = ['UL', 'UR', 'DL', 'DR']
 
+        # exception to the general approach since pawns can only attack forward
         pawn_attack = []
         diagonal_exception = ['P', 'p']
         if self.player.color == "White":
@@ -419,6 +461,7 @@ class AI(BaseAI):
         y = r
         # print("  Dir: "+str(d)+":"+str(s))
         for i in range(1, s + 1):
+            # changing file and rank based on direction d
             if 'U' in d:
                 y += 1
             if 'D' in d:
@@ -429,9 +472,11 @@ class AI(BaseAI):
                 x = self.inc_char(x)
 
             m = self.check_map(x, y)
+            # is (x, y) on the board?
             if m != -1:
                 p = self.access_map(x, y)
                 # print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
+            # does (x, y) contain a friendly?
             if m == 1:
                 p = self.access_map(x, y)
                 # skip over king
@@ -439,24 +484,32 @@ class AI(BaseAI):
                     continue
                 else:
                     return False
+            # does (x, y) contain a enemy?
             elif m == 2:
                 p = self.access_map(x, y)
+                # if d is a straight direction (U, D, L, R)
                 if d in straight_dir:
+                    # can straight moving pieces with reach of 1 attack?
                     if i == 1 and p in straight_pieces_1:
                         # print("      Return True")
                         return True
+                    # can straight moving pieces attack?
                     if p in straight_pieces:
                         # print("      Return True")
                         return True
                     else:
                         return False
 
+                # if d is a diagonal direction (UL, UR, DL, UR)
                 elif d in diagonal_dir:
+                    # can diagonally moving pieces with reach of 1 attack?
                     if i == 1 and p in diagonal_pieces_1:
                         # print("      Return True")
                         return True
+                    # can pawns attack?
                     if i == 1 and d in pawn_attack and p in diagonal_exception:
                         return True
+                    # can diagonally moving pieces attack?
                     if p in diagonal_pieces:
                         # print("      Return True")
                         return True
@@ -465,14 +518,17 @@ class AI(BaseAI):
 
         return False
 
+    # Des: checks if any knights can attack a position
     def check_attack_knight(self, f, r):
         exception_pieces = ['N', 'n']
 
+        # looping through 1-8 since there are 8 diffrent possible positions to attack from
         # print("  Knights:")
         for i in range(1, 9):
             x = f
             y = r
 
+            # changing file and rank to check positions
             if i == 1:
                 x = self.dec_char(x, 2)
                 y += 1
@@ -499,18 +555,23 @@ class AI(BaseAI):
                 y -= 1
 
             m = self.check_map(x, y)
+            # if (x, y) is on the board
             if m != -1:
                 p = self.access_map(x, y)
                 # print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
+            # if (x, y) holds a enemy
             if m == 2:
                 p = self.access_map(x, y)
+                # is the piece p a enemy knight?
                 if p in exception_pieces:
                     # print("      Return True")
                     return True
 
         return False
 
+    # Des: returns all possible moves for a piece p moving in direction d.
     def get_moves_in_direction(self, p, d):
+        # finding the number of spaces between p and the edge of the board in direction d
         if len(d) == 1:
             s = self.get_spaces_from_point(p.file, p.rank, d)
         else:
@@ -524,6 +585,7 @@ class AI(BaseAI):
         y = p.rank
         # print("Getting Moves For: "+x+str(y)+", Move Dir: " + str(d) + ":" + str(s))
         for i in range(1, s + 1):
+            # x and y change based on the value of d
             if 'U' in d:
                 y += 1
             if 'D' in d:
@@ -534,16 +596,20 @@ class AI(BaseAI):
                 x = self.inc_char(x)
 
             m = self.check_map(x, y)
+            # is (x, y) on the board?
             if m != -1:
                 tmp_p = self.access_map(x, y)
                 # print("    (" + str(i) + ") " + x + str(y) + ": " + tmp_p + ": " + str(self.is_enemy(tmp_p)))
+            # is (x, y) empty?
             if m == 0:
                 if self.move_cause_check(p, x, y) is False:
                     # print("    Append " + x + str(y))
                     moves.append((p, x, y))
+            # does (x, y) contain a friendly?
             elif m == 1:
                 # print("    Return Moves")
                 return moves
+            # does (x, y) contain a enemy piece?
             elif m == 2:
                 if self.move_cause_check(p, x, y) is False:
                     # print("    Append " + x + str(y))
@@ -554,16 +620,22 @@ class AI(BaseAI):
 
         return moves
 
+    # Des: checks if the king is in check, returns true for yes, false for no.
     def is_check(self):
         kings = [x for x in self.player.pieces if x.type == "King"]
 
+        # looping through kings
         for k in kings:
+            # checking if the king can be attacked
             if self.check_attack(k.file, k.rank):
                 return True
 
+    # Des: determines if a move will cause the player's king to be checked
     def move_cause_check(self, piece, f, r):
         check = False
 
+        # simulates a move to show the corresponding collision map
+        # writing move to collision map
         x = self.convert_file_to_map_x(piece.file)
         y = self.convert_rank_to_map_y(piece.rank)
         p = self._collision_map[y][x]
@@ -577,6 +649,7 @@ class AI(BaseAI):
         if self.is_check():
             check = True
 
+        # removing move from collision map
         x = self.convert_file_to_map_x(piece.file)
         y = self.convert_rank_to_map_y(piece.rank)
         self._collision_map[y][x] = p
@@ -587,12 +660,14 @@ class AI(BaseAI):
 
         return check
 
+    # Des: exicutes a move passed.
     def do_move(self, m):
         if len(m) == 4:
             m[0].move(m[1], m[2], m[3])
         else:
             m[0].move(m[1], m[2])
 
+    # Des: builds the initial collision map from the fen string
     def build_map(self):
         x, y = 0, 7
         for k in self.game.fen:
@@ -607,6 +682,7 @@ class AI(BaseAI):
             elif k == ' ':
                 break
 
+    # Des: updates the collision map with a move
     def update_map(self, m):
         is_upper = False
 
@@ -618,7 +694,9 @@ class AI(BaseAI):
         x = self.convert_file_to_map_x(m.piece.file)
         y = self.convert_rank_to_map_y(m.piece.rank)
 
+        # was the piece moved promoted?
         if m.promotion != "":
+            # writing the pawns promotion to the collision map
             # print("Promotion From "+p)
             is_upper = p.isupper()
 
@@ -663,9 +741,11 @@ class AI(BaseAI):
             else:
                 return 1
 
+    # Des: returns the element at file f and rank r of the collision map
     def access_map(self, f, r):
         return self._collision_map[self.convert_rank_to_map_y(r)][self.convert_file_to_map_x(f)]
 
+    # Des: checks if the character piece ('p', 'P', 'r', 'R') is a enemy piece of the current player.
     def is_enemy(self, p):
         c = self.player.color
 
@@ -682,6 +762,7 @@ class AI(BaseAI):
                 return True
         return False
 
+    # Des: prints the collision map
     def print_collision_map(self):
         k = 8
         for x in reversed(self._collision_map):
@@ -689,6 +770,7 @@ class AI(BaseAI):
             k -= 1
         print()
 
+    # Des: returns the number of spaces between file f and rank r and the edge of the board in direction d.
     def get_spaces_from_point(self, f, r, d):
         if d == 'U':
             return 8 - r
@@ -701,17 +783,28 @@ class AI(BaseAI):
         if d == 'A':
             return 8 - r, r - 1, ord(f) - 97, 7 - (ord(f) - 97)
 
+    # Des: used to convert a char file to a int to acces the collision map corresponding file cell.
     def convert_file_to_map_x(self, k):
         return ord(k) - 97
 
+    # Des: used to convert a int rank to access the collision map corresponding  rank cell.
     def convert_rank_to_map_y(self, k):
         return k - 1
 
+    # Des: used to incement a file character
     def inc_char(self, k, x=1):
         return chr(ord(k) + x)
 
+    # Des: used to decrement a file character
     def dec_char(self, k, x=1):
         return chr(ord(k) - x)
+
+    # Des: outputs the list of moves
+    def output_moves(self, moves):
+        print(moves[0][0].type + ":" + moves[0][0].file + str(moves[0][0].rank) + "->", end='')
+        for x in moves:
+            print(x[1] + str(x[2]) + ", ", end='')
+        print("\n")
 
     def print_current_board(self):
         """Prints the current board using pretty ASCII art
