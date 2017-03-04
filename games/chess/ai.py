@@ -91,11 +91,11 @@ class AI(BaseAI):
     def get_possible_moves(self):
         moves = []
         moves += self.get_pawn_moves()
-        #moves += self.get_rook_moves()
-        #moves += self.get_knight_moves()
-        #moves += self.get_bishop_moves()
-        #moves += self.get_queen_moves()
-        #moves += self.get_king_moves()
+        moves += self.get_rook_moves()
+        moves += self.get_knight_moves()
+        moves += self.get_bishop_moves()
+        moves += self.get_queen_moves()
+        moves += self.get_king_moves()
 
         return moves
 
@@ -148,7 +148,6 @@ class AI(BaseAI):
             prev_move = self.game.moves[-1]
             if self.can_pawn_passant(p, prev_move):
                 moves.append((p, prev_move.to_file, p.rank + d))
-                print("Can do passant")
 
         return moves
 
@@ -405,9 +404,16 @@ class AI(BaseAI):
         straight_pieces = ['R', 'Q', 'r', 'q']
         straight_pieces_1 = ['K', 'k']
         diagonal_pieces = ['B', 'Q', 'b', 'q']
-        diagonal_pieces_1 = ['K', 'P', 'k', 'p']
+        diagonal_pieces_1 = ['K', 'k']
         straight_dir = ['U', 'D', 'L', 'R']
         diagonal_dir = ['UL', 'UR', 'DL', 'DR']
+
+        pawn_attack = []
+        diagonal_exception = ['P', 'p']
+        if self.player.color == "White":
+            pawn_attack = ["UL", "UR"]
+        elif self.player.color == "Black":
+            pawn_attack = ["DL", "DR"]
 
         x = f
         y = r
@@ -448,6 +454,8 @@ class AI(BaseAI):
                 elif d in diagonal_dir:
                     if i == 1 and p in diagonal_pieces_1:
                         # print("      Return True")
+                        return True
+                    if i == 1 and d in pawn_attack and p in diagonal_exception:
                         return True
                     if p in diagonal_pieces:
                         # print("      Return True")
