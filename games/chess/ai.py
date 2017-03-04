@@ -91,7 +91,7 @@ class AI(BaseAI):
         moves = []
         moves += self.get_pawn_moves()
         moves += self.get_rook_moves()
-        #moves += self.get_knight_moves()
+        moves += self.get_knight_moves()
         #moves += self.get_bishop_moves()
         #moves += self.get_queen_moves()
         moves += self.get_king_moves()
@@ -302,7 +302,7 @@ class AI(BaseAI):
         return moves
 
     def check_attack(self, f, r):
-        #print("Check Attack from: " + str(f) + str(r))
+        print("Check Attack from: " + str(f) + str(r))
         if self.check_attack_direction(f, r, 'U'):
             return True
         if self.check_attack_direction(f, r, 'D'):
@@ -342,7 +342,7 @@ class AI(BaseAI):
 
         x = f
         y = r
-        #print("  Dir: "+str(d)+":"+str(s))
+        print("  Dir: "+str(d)+":"+str(s))
         for i in range(1, s + 1):
             if 'U' in d:
                 y += 1
@@ -356,7 +356,7 @@ class AI(BaseAI):
             m = self.check_map(x, y)
             if m != -1:
                 p = self.access_map(x, y)
-                #print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
+                print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
             if m == 1:
                 p = self.access_map(x, y)
                 # skip over king
@@ -368,20 +368,20 @@ class AI(BaseAI):
                 p = self.access_map(x, y)
                 if d in straight_dir:
                     if i == 1 and p in straight_pieces_1:
-                        #print("      Return True")
+                        print("      Return True")
                         return True
                     if p in straight_pieces:
-                        #print("      Return True")
+                        print("      Return True")
                         return True
                     else:
                         return False
 
                 elif d in diagonal_dir:
                     if i == 1 and p in diagonal_pieces_1:
-                        #print("      Return True")
+                        print("      Return True")
                         return True
                     if p in diagonal_pieces:
-                        #print("      Return True")
+                        print("      Return True")
                         return True
                     else:
                         return False
@@ -391,7 +391,7 @@ class AI(BaseAI):
     def check_attack_knight(self, f, r):
         exception_pieces = ['N', 'n']
 
-        #print("  Knights:")
+        print("  Knights:")
         for i in range(1, 9):
             x = f
             y = r
@@ -424,11 +424,11 @@ class AI(BaseAI):
             m = self.check_map(x, y)
             if m != -1:
                 p = self.access_map(x, y)
-                #print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
+                print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
             if m == 2:
                 p = self.access_map(x, y)
                 if p in exception_pieces:
-                    #print("      Return True")
+                    print("      Return True")
                     return True
 
         return False
@@ -533,7 +533,7 @@ class AI(BaseAI):
         y = self.convert_rank_to_map_y(m.piece.rank)
 
         if m.promotion != "":
-            print("Promotion From "+p)
+            # print("Promotion From "+p)
             is_upper = p.isupper()
 
             if m.promotion == "Queen":
@@ -556,7 +556,8 @@ class AI(BaseAI):
                     p = 'N'
                 else:
                     p = 'n'
-            print("Promotion to "+p)
+
+            # print("Promotion to "+p)
 
         self._collision_map[y][x] = p
 
@@ -623,8 +624,8 @@ class AI(BaseAI):
     def inc_char(self, k, x=1):
         return chr(ord(k) + x)
 
-    def dec_char(self, k, x=-1):
-        return chr(ord(k) + x)
+    def dec_char(self, k, x=1):
+        return chr(ord(k) - x)
 
     def print_current_board(self):
         """Prints the current board using pretty ASCII art
