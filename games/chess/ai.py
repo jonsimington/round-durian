@@ -6,8 +6,6 @@ from random import shuffle
 
 class AI(BaseAI):
     """ The basic AI functions that are the same between games. """
-    _collision_map = [[' ' for x in range(8)] for y in range(8)]
-    _l = 0
 
     def get_name(self):
         """ This is the name you send to the server so your AI will control the
@@ -24,8 +22,8 @@ class AI(BaseAI):
         and game. You can initialize your AI here.
         """
 
-        # replace with your start logic
-        self.build_map()
+        self._collision_map = self.build_map_fen()
+        self._l = 0
 
     def game_updated(self):
         """ This is called every time the game's state updates, so if you are
@@ -36,7 +34,7 @@ class AI(BaseAI):
         if len(self.game.moves) > 0:
             for x in self.game.players:
                 if x.made_move is True:
-                    self.update_map(self.game.moves[-1])
+                    self.do_move_collision_map(self.get_collision_map(), self.game.moves[-1])
 
     def end(self, won, reason):
         """ This is called when the game ends, you can clean up your data and
@@ -69,26 +67,34 @@ class AI(BaseAI):
             self.output_moves([x for x in possible_moves if x[0].id == move[0].id])
             self.do_move(move)
 
-
-
         return True  # to signify we are done with our turn.
 
-    def minimax(self, depth, player, collision_map):
-        if self.terminal(collision_map):
-            return self.utility(player, collision_map)
+    def minimax(self, depth, player_mm, collision_map):
+        if depth == 0 or self.terminal(collision_map):
+            return self.utility(player_mm, collision_map)
 
-        if player == "Max":
-            self.max_value(collision_map)
-        elif player == "Min":
-            self.min_value(collision_map)
+        if player_mm == "Max":
+            self.max_value(depth, collision_map)
+        elif player_mm == "Min":
+            self.min_value(depth, collision_map)
 
-    def max_value(self, collision_map):
-        possible_moves = self.get_possible_moves()
-        # for all possible actions, return the max of minimax(self, depth, player', collision_map')
-        pass
+    # for all possible actions, return the max of minimax(self, depth, player', collision_map')
+    def max_value(self, depth, collision_map):
+        possible_moves = self.get_possible_moves(self.max_color())
+        for move in possible_moves:
+            undo = self.do_move_collision_map(collision_map, move)
+            self.minimax(depth - 1, "Min", collision_map)
+            self.undo_move_collision_map(collision_map, undo)
 
-    def min_value(self, collision_map):
-        pass
+    def max_color(self):
+        return self.color
+
+    def min_value(self, depth, collision_map):
+        possbile_moves = self.get_possible_moves(self.min_color())
+
+    def min_color(self):
+        player_list = [x for x in self.game.players if x.color != self.player.color]
+        return player_list[0].color
 
 
 
@@ -726,13 +732,14 @@ class AI(BaseAI):
             m[0].move(m[1], m[2])
 
     # Des: builds the initial collision map from the fen string
-    def build_map(self):
+    def build_map_fen(self):
+        col_map = [[' ' for x in range(8)] for y in range(8)]
         x, y = 0, 7
         for k in self.game.fen:
             if k.isdigit():
                 x += int(k)
             elif k.isalpha():
-                self._collision_map[y][x] = k
+                col_map[y][x] = k
                 x += 1
             elif k == '/':
                 y -= 1
@@ -740,48 +747,76 @@ class AI(BaseAI):
             elif k == ' ':
                 break
 
-    # Des: updates the collision map with a move
-    def update_map(self, m):
-        is_upper = False
+        return col_map
 
-        x = self.convert_file_to_map_x(m.from_file)
-        y = self.convert_rank_to_map_y(m.from_rank)
-        p = self._collision_map[y][x]
-        self._collision_map[y][x] = ' '
+    def castle_fen(self):
+        pass
 
-        x = self.convert_file_to_map_x(m.piece.file)
-        y = self.convert_rank_to_map_y(m.piece.rank)
+    def passant_fen(self):
+        pass
 
-        # was the piece moved promoted?
-        if m.promotion != "":
-            # writing the pawns promotion to the collision map
-            # print("Promotion From "+p)
-            is_upper = p.isupper()
+    def do_move_collision_map(self, collision_map, move):
+        x = self.convert_file_to_map_x(move.from_file)
+        y = self.convert_rank_to_map_y(move.from_rank)
+        from_p = collision_map[y][x]
+        collision_map[y][x] = ' '
 
-            if m.promotion == "Queen":
-                if is_upper:
-                    p = 'Q'
+        x = self.convert_file_to_map_x(move.piece.file)
+        y = self.convert_rank_to_map_y(move.piece.rank)
+        to_p = collision_map[y][x]
+
+        # checking for pawn promotions
+        if move.promotion:
+            if move.promotion == "Queen":
+                if from_p.isupper():
+                    from_p = 'Q'
                 else:
-                    p = 'q'
-            elif m.promotion == "Rook":
-                if is_upper:
-                    p = 'R'
+                    from_p = 'q'
+            elif move.promotion == "Rook":
+                if from_p.isupper():
+                    from_p = 'R'
                 else:
-                    p = 'r'
-            elif m.promotion == "Bishop":
-                if is_upper:
-                    p = 'B'
+                    from_p = 'r'
+            elif move.promotion == "Bishop":
+                if from_p.isupper():
+                    from_p = 'B'
                 else:
-                    p = 'b'
-            elif m.promotion == "Knight":
-                if is_upper:
-                    p = 'N'
+                    from_p = 'b'
+            elif move.promotion == "Knight":
+                if from_p.isupper():
+                    from_p = 'N'
                 else:
-                    p = 'n'
+                    from_p = 'n'
+            else:
+                print("Error: could not find correct promotion for " + move.promotion + ".")
 
-            # print("Promotion to "+p)
+        collision_map[y][x] = from_p
 
-        self._collision_map[y][x] = p
+        return move, to_p # returns move that was done and to_p is the character overwritten after move
+
+    def undo_move_collision_map(self, collision_map, undo):
+        move = undo[0]
+        to_p = undo[1] # character overwritten by move
+
+        x = self.convert_file_to_map_x(move.piece.file)
+        y = self.convert_rank_to_map_y(move.piece.rank)
+        from_p = self._collision_map[y][x]
+        collision_map[y][x] = to_p
+
+        x = self.convert_file_to_map_x(move.from_file)
+        y = self.convert_rank_to_map_y(move.from_rank)
+
+        # checking for promotion
+        if move.promotion:
+            if from_p.isupper():
+                from_p = 'P'
+            else:
+                from_p = 'p'
+
+        collision_map[y][x] = from_p
+
+        return move # returns move that was just undone
+
 
     # Des: Returns a number based on the status of the collision_map at file f and rank r.
     # Post: Returns -1 if f and r are not valid positions, 0 if the position is empty, 1 if the position contains a
@@ -799,9 +834,17 @@ class AI(BaseAI):
             else:
                 return 1
 
+    def copy_collision_map(self, col_map):
+        for x in range(len(self.get_collision_map())):
+            for y in range(len(x)):
+                col_map[y][x] = self.get_collision_map()[y][x]
+
     # Des: returns the element at file f and rank r of the collision map
     def access_map(self, f, r):
         return self._collision_map[self.convert_rank_to_map_y(r)][self.convert_file_to_map_x(f)]
+
+    def get_collision_map(self):
+        return self._collision_map
 
     # Des: checks if the character piece ('p', 'P', 'r', 'R') is a enemy piece of the current player.
     def is_enemy(self, p, player_obj):
