@@ -34,9 +34,7 @@ class AI(BaseAI):
         if len(self.game.moves) > 0:
             for x in self.game.players:
                 if x.made_move is True:
-                    move = self.game.moves[-1]
-                    m = (move.piece, move.from_file, move.from_rank, move.promotion)
-                    self.do_move_collision_map(self.get_collision_map(), m)
+                    self.update_collision_map(self.get_collision_map(), self.game.moves[-1])
 
     def end(self, won, reason):
         """ This is called when the game ends, you can clean up your data and
@@ -69,24 +67,24 @@ class AI(BaseAI):
             print("\nfound terminal\n")
         """
 
-        move = self.minimax(100, self.copy_collision_map(self.get_collision_map()))
+        move = self.minimax(2, self.copy_collision_map(self.get_collision_map()))
         self.do_move(move)
         print(move)
         return True  # to signify we are done with our turn.
 
-    def minimax(self, depth, collision_map):
-        possible_moves = self.get_possible_moves(self.max_color())
+    def minimax(self, depth, col_map):
+        possible_moves = self.get_possible_moves(self.max_color(), col_map)
         best_move = possible_moves[0]
         best_score = float('-inf')
         for move in possible_moves:
-            clone = self.copy_collision_map(collision_map)
-            undo = self.do_move_collision_map(clone, move)
-            score = self.min_value(depth - 1, clone)
-            self.undo_move_collision_map(clone, undo)
+            undo = self.do_move_collision_map(col_map, move)
+            score = self.utility(col_map, "Max")
+            #score = self.min_value(depth - 1, clone)
+            self.undo_move_collision_map(col_map, undo)
             if score > best_score:
                 best_score = score
                 best_move = move
-            return best_move
+        return best_move
 
     # for all possible actions, return the max of minimax(self, depth, player', collision_map')
     def max_value(self, depth, collision_map):
@@ -137,23 +135,35 @@ class AI(BaseAI):
     def result(self, collision_map, action):
         pass
 
-    def terminal(self, collision_map, player_mm):
-        if len(self.get_possible_moves(self.minimax_color(player_mm))) == 0:
+    def terminal(self, col_map, player_mm):
+        if len(self.get_possible_moves(self.minimax_color(player_mm), col_map)) == 0:
             return True
         if self.is_draw():
             return True
         return False
 
-    def utility(self, collision_map, color):
+    def utility(self, col_map, player_mm):
         total = 0
-        for x in collision_map:
+        for x in col_map:
             for p in x:
-                if color == "Black":
+                if self.minimax_color(player_mm) == "Black":
                     if p.islower():
                         total += self.get_piece_value(p)
-                elif color == "White":
+                    elif p.isupper():
+                        total -= self.get_piece_value(p)
+                elif self.minimax_color(player_mm) == "White":
                     if p.isupper():
                         total += self.get_piece_value(p)
+                    elif p.islower():
+                        total -= self.get_piece_value(p)
+
+        if self.minimax_color(player_mm) == "Black":
+            total += len(self.get_possible_moves("Black", col_map))
+            total -= len(self.get_possible_moves("White", col_map))
+        elif self.minimax_color(player_mm) == "White":
+            total += len(self.get_possible_moves("White", col_map))
+            total -= len(self.get_possible_moves("Black", col_map))
+
         return total
 
     def get_piece_value(self, piece):
@@ -208,17 +218,17 @@ class AI(BaseAI):
     # Des: Calls the functions that gets all the moves for each pieces and adds them into a list.
     # Pre: None
     # Post: list of moves returns that contains a tuple of the piece, the file, and the rank.
-    def get_possible_moves(self, player_color):
+    def get_possible_moves(self, player_color, col_map):
         player_list = [x for x in self.game.players if x.color == player_color]
         player_obj = player_list[0]
 
         moves = []
-        moves += self.get_pawn_moves(player_obj)
-        moves += self.get_rook_moves(player_obj)
-        moves += self.get_knight_moves(player_obj)
-        moves += self.get_bishop_moves(player_obj)
-        moves += self.get_queen_moves(player_obj)
-        moves += self.get_king_moves(player_obj)
+        moves += self.get_pawn_moves(player_obj, col_map)
+        moves += self.get_rook_moves(player_obj, col_map)
+        moves += self.get_knight_moves(player_obj, col_map)
+        moves += self.get_bishop_moves(player_obj, col_map)
+        moves += self.get_queen_moves(player_obj, col_map)
+        moves += self.get_king_moves(player_obj, col_map)
 
         return moves
 
@@ -226,19 +236,19 @@ class AI(BaseAI):
     # Des: Loops through all pawns and gets the possible moves for each pawn.
     # Pre: None
     # Post: list of pawn moves returned
-    def get_pawn_moves(self, player_obj):
+    def get_pawn_moves(self, player_obj, col_map):
         pawns = [x for x in player_obj.pieces if x.type == "Pawn"]
         pawn_moves = []
 
         for pawn in pawns:
-            pawn_moves += self.get_moves_for_pawn(pawn, player_obj)
+            pawn_moves += self.get_moves_for_pawn(pawn, player_obj, col_map)
 
         return pawn_moves
 
     # Des: Gets the possible moves for a specific pawn
     # Pre: None
     # Post: returns list of moves for the pawn passed
-    def get_moves_for_pawn(self, p, player_obj):
+    def get_moves_for_pawn(self, p, player_obj, col_map):
         moves = []
         promotion = ["Queen", "Knight", "Rook", "Bishop"]
         d = player_obj.rank_direction
@@ -261,16 +271,16 @@ class AI(BaseAI):
             elif i == 3:
                 y += d
                 m = 0
-            elif i == 4 and self.can_pawn_move_2(p, player_obj) is True:
+            elif i == 4 and self.can_pawn_move_2(p, player_obj, col_map) is True:
                 m = 0
                 y += 2 * d
             else:
                 continue
 
             # checking if the file and rank set are valid moves for the pawn
-            if self.check_map(x, y, player_obj) == m:
+            if self.check_map(x, y, player_obj, col_map) == m:
                 # will move cause check?
-                if self.move_cause_check(p, x, y, player_obj) is False:
+                if self.move_cause_check(p, x, y, player_obj, col_map) is False:
                     # can pawn be promoted?
                     if self.check_pawn_promotion(y, c):
                         for promo in promotion:
@@ -290,14 +300,14 @@ class AI(BaseAI):
     # Des: checks if pawn p can move to spaces
     # Pre: None
     # Post: return true if pawn can mpve 2 s[aces, false otherwise
-    def can_pawn_move_2(self, p, player_obj):
+    def can_pawn_move_2(self, p, player_obj, col_map):
         if p.has_moved is True:
             return False
         if player_obj.color == "White" and p.rank != 2:
             return False
         elif player_obj.color == "Black" and p.rank != 7:
             return False
-        elif self.check_map(p.file, p.rank + player_obj.rank_direction, player_obj) == 0:
+        elif self.check_map(p.file, p.rank + player_obj.rank_direction, player_obj, col_map) == 0:
             return True
 
         return False
@@ -329,22 +339,22 @@ class AI(BaseAI):
 
     # ------------------------Rooks---------------------------------
     # Des: gets all the moves for the rooks and returns them in a list
-    def get_rook_moves(self, player_obj):
+    def get_rook_moves(self, player_obj, col_map):
         rooks = [x for x in player_obj.pieces if x.type == "Rook"]
         rook_moves = []
 
         # loops through all rooks
         for r in rooks:
-            rook_moves += self.get_moves_in_direction(r, 'U', player_obj)
-            rook_moves += self.get_moves_in_direction(r, 'D', player_obj)
-            rook_moves += self.get_moves_in_direction(r, 'L', player_obj)
-            rook_moves += self.get_moves_in_direction(r, 'R', player_obj)
-            rook_moves += self.get_castle_moves(r, player_obj)
+            rook_moves += self.get_moves_in_direction(r, 'U', player_obj, col_map)
+            rook_moves += self.get_moves_in_direction(r, 'D', player_obj, col_map)
+            rook_moves += self.get_moves_in_direction(r, 'L', player_obj, col_map)
+            rook_moves += self.get_moves_in_direction(r, 'R', player_obj, col_map)
+            rook_moves += self.get_castle_moves(r, player_obj, col_map)
 
         return rook_moves
 
     # Des: gets the castle moves possible for a rook
-    def get_castle_moves(self, r, player_obj):
+    def get_castle_moves(self, r, player_obj, col_map):
         kings = [x for x in player_obj.pieces if x.type == "King"]
         castle_moves = []
 
@@ -352,43 +362,43 @@ class AI(BaseAI):
         for k in kings:
             f = self.castle_file(k, r)
             # can rook r castle with king k at file f?
-            if self.can_castle(k, r, f, player_obj):
+            if self.can_castle(k, r, f, player_obj, col_map):
                 castle_moves.append((k, f, k.rank))
 
         return castle_moves
 
     # Des: checks if kings k and rook r can castle at file f.
-    def can_castle(self, k, r, f, player_obj):
+    def can_castle(self, k, r, f, player_obj, col_map):
         # has the king or rook moved?
         if k.has_moved is True or r.has_moved is True:
             return False
         # is the king in check?
-        if self.is_check(player_obj):
+        if self.is_check(player_obj, col_map):
             return False
 
         # checking if spaces between rook and king are clean and spaces the king must move through are not attackable
         # left castle
         if r.file == 'a':
-            if self.check_map(self.dec_char(k.file), k.rank, player_obj) != 0:
+            if self.check_map(self.dec_char(k.file), k.rank, player_obj, col_map) != 0:
                 return False
-            elif self.check_map(self.dec_char(k.file, 2), k.rank, player_obj) != 0:
+            elif self.check_map(self.dec_char(k.file, 2), k.rank, player_obj, col_map) != 0:
                 return False
-            elif self.check_map(self.dec_char(k.file, 3), k.rank, player_obj) != 0:
+            elif self.check_map(self.dec_char(k.file, 3), k.rank, player_obj, col_map) != 0:
                 return False
-            elif self.check_attack(self.dec_char(k.file), k.rank, player_obj):
+            elif self.check_attack(self.dec_char(k.file), k.rank, player_obj, col_map):
                 return False
-            elif self.check_attack(self.dec_char(k.file, 2), k.rank, player_obj):
+            elif self.check_attack(self.dec_char(k.file, 2), k.rank, player_obj, col_map):
                 return False
 
         # right castle
         elif r.file == 'h':
-            if self.check_map(self.inc_char(k.file), k.rank, player_obj) != 0:
+            if self.check_map(self.inc_char(k.file), k.rank, player_obj, col_map) != 0:
                 return False
-            elif self.check_map(self.inc_char(k.file, 2), k.rank, player_obj) != 0:
+            elif self.check_map(self.inc_char(k.file, 2), k.rank, player_obj, col_map) != 0:
                 return False
-            elif self.check_attack(self.inc_char(k.file), k.rank, player_obj):
+            elif self.check_attack(self.inc_char(k.file), k.rank, player_obj, col_map):
                 return False
-            elif self.check_attack(self.inc_char(k.file, 2), k.rank, player_obj):
+            elif self.check_attack(self.inc_char(k.file, 2), k.rank, player_obj, col_map):
                 return False
 
         return True
@@ -402,17 +412,17 @@ class AI(BaseAI):
 
     # -------------------------Knights--------------------------------
     # Des: loops through all knighs and returns the possible moves
-    def get_knight_moves(self, player_obj):
+    def get_knight_moves(self, player_obj, col_map):
         knights = [x for x in player_obj.pieces if x.type == "Knight"]
         knight_moves = []
 
         for k in knights:
-            knight_moves += self.get_moves_for_knight(k, player_obj)
+            knight_moves += self.get_moves_for_knight(k, player_obj, col_map)
 
         return knight_moves
 
     # Des: returns the possible moves for a knight
-    def get_moves_for_knight(self, k, player_obj):
+    def get_moves_for_knight(self, k, player_obj, col_map):
         moves = []
 
         # loops through 1-8 since there are 8 possible moves for a knight
@@ -447,60 +457,60 @@ class AI(BaseAI):
                 y -= 1
 
             # checking if position is empty or holds an enemy
-            m = self.check_map(x, y, player_obj)
+            m = self.check_map(x, y, player_obj, col_map)
             if m == 0 or m == 2:
                 # will move cause players king to be checked
-                if self.move_cause_check(k, x, y, player_obj) is False:
+                if self.move_cause_check(k, x, y, player_obj, col_map) is False:
                     moves.append((k, x, y))
 
         return moves
 
     # -----------------------------Bishops------------------------------
     # Des: returns a list of possible moves for all bishops.
-    def get_bishop_moves(self, player_obj):
+    def get_bishop_moves(self, player_obj, col_map):
         bishops = [x for x in player_obj.pieces if x.type == "Bishop"]
         bishop_moves = []
 
         for b in bishops:
-            bishop_moves += self.get_moves_in_direction(b, 'UL', player_obj)
-            bishop_moves += self.get_moves_in_direction(b, 'UR', player_obj)
-            bishop_moves += self.get_moves_in_direction(b, 'DL', player_obj)
-            bishop_moves += self.get_moves_in_direction(b, 'DR', player_obj)
+            bishop_moves += self.get_moves_in_direction(b, 'UL', player_obj, col_map)
+            bishop_moves += self.get_moves_in_direction(b, 'UR', player_obj, col_map)
+            bishop_moves += self.get_moves_in_direction(b, 'DL', player_obj, col_map)
+            bishop_moves += self.get_moves_in_direction(b, 'DR', player_obj, col_map)
 
         return bishop_moves
 
     # ---------------------------------Queen-----------------------------
     # Des: returns a list of possible moves for all queens.
-    def get_queen_moves(self, player_obj):
+    def get_queen_moves(self, player_obj, col_map):
         queens = [x for x in player_obj.pieces if x.type == "Queen"]
         queen_moves = []
 
         for q in queens:
-            queen_moves += self.get_moves_in_direction(q, 'U', player_obj)
-            queen_moves += self.get_moves_in_direction(q, 'D', player_obj)
-            queen_moves += self.get_moves_in_direction(q, 'L', player_obj)
-            queen_moves += self.get_moves_in_direction(q, 'R', player_obj)
-            queen_moves += self.get_moves_in_direction(q, 'UL', player_obj)
-            queen_moves += self.get_moves_in_direction(q, 'UR', player_obj)
-            queen_moves += self.get_moves_in_direction(q, 'DL', player_obj)
-            queen_moves += self.get_moves_in_direction(q, 'DR', player_obj)
+            queen_moves += self.get_moves_in_direction(q, 'U', player_obj, col_map)
+            queen_moves += self.get_moves_in_direction(q, 'D', player_obj, col_map)
+            queen_moves += self.get_moves_in_direction(q, 'L', player_obj, col_map)
+            queen_moves += self.get_moves_in_direction(q, 'R', player_obj, col_map)
+            queen_moves += self.get_moves_in_direction(q, 'UL', player_obj, col_map)
+            queen_moves += self.get_moves_in_direction(q, 'UR', player_obj, col_map)
+            queen_moves += self.get_moves_in_direction(q, 'DL', player_obj, col_map)
+            queen_moves += self.get_moves_in_direction(q, 'DR', player_obj, col_map)
 
         return queen_moves
 
     # -----------------------------King--------------------------
     # Des: returns a list of all possible moves for the kings
-    def get_king_moves(self, player_obj):
+    def get_king_moves(self, player_obj, col_map):
         kings = [x for x in player_obj.pieces if x.type == "King"]
         king_moves = []
 
         # looping through kings
         for k in kings:
-            king_moves += self.get_moves_for_king(k, player_obj)
+            king_moves += self.get_moves_for_king(k, player_obj, col_map)
 
         return king_moves
 
     # Des: returns a list of all possible moves for a king
-    def get_moves_for_king(self, k, player_obj):
+    def get_moves_for_king(self, k, player_obj, col_map):
         moves = []
 
         # loops through 1-8 since there are 8 possible moves for a king
@@ -531,45 +541,45 @@ class AI(BaseAI):
                 y += 1
 
             # is position empty or does it contain an enemy?
-            m = self.check_map(x, y, player_obj)
+            m = self.check_map(x, y, player_obj, col_map)
             if m == 0 or m == 2:
                 # can the king be attacked from this position?
-                if self.check_attack(x, y, player_obj) is False:
+                if self.check_attack(x, y, player_obj, col_map) is False:
                     moves.append((k, x, y))
 
         return moves
 
     # Des: takes a file f and rank r, and determines if any pieces can attack this position
-    def check_attack(self, f, r, player_obj):
+    def check_attack(self, f, r, player_obj, col_map):
         # checking if position can be attacked from all directions
 
         # print("Check Attack from: " + str(f) + str(r))
-        if self.check_attack_direction(f, r, 'U', player_obj):
+        if self.check_attack_direction(f, r, 'U', player_obj, col_map):
             return True
-        if self.check_attack_direction(f, r, 'D', player_obj):
+        if self.check_attack_direction(f, r, 'D', player_obj, col_map):
             return True
-        if self.check_attack_direction(f, r, 'L', player_obj):
+        if self.check_attack_direction(f, r, 'L', player_obj, col_map):
             return True
-        if self.check_attack_direction(f, r, 'R', player_obj):
+        if self.check_attack_direction(f, r, 'R', player_obj, col_map):
             return True
-        if self.check_attack_direction(f, r, 'UL', player_obj):
+        if self.check_attack_direction(f, r, 'UL', player_obj, col_map):
             return True
-        if self.check_attack_direction(f, r, 'UR', player_obj):
+        if self.check_attack_direction(f, r, 'UR', player_obj, col_map):
             return True
-        if self.check_attack_direction(f, r, 'DL', player_obj):
+        if self.check_attack_direction(f, r, 'DL', player_obj, col_map):
             return True
-        if self.check_attack_direction(f, r, 'DR', player_obj):
+        if self.check_attack_direction(f, r, 'DR', player_obj, col_map):
             return True
 
         # checking if knights can attack position
-        if self.check_attack_knight(f, r, player_obj):
+        if self.check_attack_knight(f, r, player_obj, col_map):
             return True
 
         return False
 
     # Des: takes a file f, rank r, and a direction d, and determines if (f, r) can be attacked from the direction d.
     # Pre: d must be U, D, L, R, UL, UR, DL, DR.
-    def check_attack_direction(self, f, r, d, player_obj):
+    def check_attack_direction(self, f, r, d, player_obj, col_map):
         # getting the number of spaces from (f, r) to the end of the board in the direction d
         if len(d) == 1:
             s = self.get_spaces_from_point(f, r, d)
@@ -608,14 +618,14 @@ class AI(BaseAI):
             if 'R' in d:
                 x = self.inc_char(x)
 
-            m = self.check_map(x, y, player_obj)
+            m = self.check_map(x, y, player_obj, col_map)
             # is (x, y) on the board?
             if m != -1:
-                p = self.access_map(x, y)
+                p = self.access_map(x, y, col_map)
                 # print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
             # does (x, y) contain a friendly?
             if m == 1:
-                p = self.access_map(x, y)
+                p = self.access_map(x, y, col_map)
                 # skip over king
                 if p in ['K', 'k']:
                     continue
@@ -623,7 +633,7 @@ class AI(BaseAI):
                     return False
             # does (x, y) contain a enemy?
             elif m == 2:
-                p = self.access_map(x, y)
+                p = self.access_map(x, y, col_map)
                 # if d is a straight direction (U, D, L, R)
                 if d in straight_dir:
                     # can straight moving pieces with reach of 1 attack?
@@ -656,7 +666,7 @@ class AI(BaseAI):
         return False
 
     # Des: checks if any knights can attack a position
-    def check_attack_knight(self, f, r, player_obj):
+    def check_attack_knight(self, f, r, player_obj, col_map):
         exception_pieces = ['N', 'n']
 
         # looping through 1-8 since there are 8 diffrent possible positions to attack from
@@ -691,14 +701,14 @@ class AI(BaseAI):
                 x = self.dec_char(x, 2)
                 y -= 1
 
-            m = self.check_map(x, y, player_obj)
+            m = self.check_map(x, y, player_obj, col_map)
             # if (x, y) is on the board
             if m != -1:
-                p = self.access_map(x, y)
+                p = self.access_map(x, y, col_map)
                 # print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
             # if (x, y) holds a enemy
             if m == 2:
-                p = self.access_map(x, y)
+                p = self.access_map(x, y, col_map)
                 # is the piece p a enemy knight?
                 if p in exception_pieces:
                     # print("      Return True")
@@ -707,7 +717,7 @@ class AI(BaseAI):
         return False
 
     # Des: returns all possible moves for a piece p moving in direction d.
-    def get_moves_in_direction(self, p, d, player_obj):
+    def get_moves_in_direction(self, p, d, player_obj, col_map):
         # finding the number of spaces between p and the edge of the board in direction d
         if len(d) == 1:
             s = self.get_spaces_from_point(p.file, p.rank, d)
@@ -732,14 +742,14 @@ class AI(BaseAI):
             if 'R' in d:
                 x = self.inc_char(x)
 
-            m = self.check_map(x, y, player_obj)
+            m = self.check_map(x, y, player_obj, col_map)
             # is (x, y) on the board?
             if m != -1:
-                tmp_p = self.access_map(x, y)
+                tmp_p = self.access_map(x, y, col_map)
                 # print("    (" + str(i) + ") " + x + str(y) + ": " + tmp_p + ": " + str(self.is_enemy(tmp_p)))
             # is (x, y) empty?
             if m == 0:
-                if self.move_cause_check(p, x, y, player_obj) is False:
+                if self.move_cause_check(p, x, y, player_obj, col_map) is False:
                     # print("    Append " + x + str(y))
                     moves.append((p, x, y))
             # does (x, y) contain a friendly?
@@ -748,7 +758,7 @@ class AI(BaseAI):
                 return moves
             # does (x, y) contain a enemy piece?
             elif m == 2:
-                if self.move_cause_check(p, x, y, player_obj) is False:
+                if self.move_cause_check(p, x, y, player_obj, col_map) is False:
                     # print("    Append " + x + str(y))
                     moves.append((p, x, y))
 
@@ -758,42 +768,42 @@ class AI(BaseAI):
         return moves
 
     # Des: checks if the king is in check, returns true for yes, false for no.
-    def is_check(self, player_obj):
+    def is_check(self, player_obj, col_map):
         kings = [x for x in player_obj.pieces if x.type == "King"]
 
         # looping through kings
         for k in kings:
             # checking if the king can be attacked
-            if self.check_attack(k.file, k.rank, player_obj):
+            if self.check_attack(k.file, k.rank, player_obj, col_map):
                 return True
 
     # Des: determines if a move will cause the player's king to be checked
-    def move_cause_check(self, piece, f, r, player_obj):
+    def move_cause_check(self, piece, f, r, player_obj, col_map):
         check = False
 
         # simulates a move to show the corresponding collision map
         # writing move to collision map
         x = self.convert_file_to_map_x(piece.file)
         y = self.convert_rank_to_map_y(piece.rank)
-        p = self._collision_map[y][x]
-        self._collision_map[y][x] = ' '
+        p = col_map[y][x]
+        col_map[y][x] = ' '
 
         x = self.convert_file_to_map_x(f)
         y = self.convert_rank_to_map_y(r)
-        tmp_p = self._collision_map[y][x]
-        self._collision_map[y][x] = p
+        tmp_p = col_map[y][x]
+        col_map[y][x] = p
 
-        if self.is_check(player_obj):
+        if self.is_check(player_obj, col_map):
             check = True
 
         # removing move from collision map
         x = self.convert_file_to_map_x(piece.file)
         y = self.convert_rank_to_map_y(piece.rank)
-        self._collision_map[y][x] = p
+        col_map[y][x] = p
 
         x = self.convert_file_to_map_x(f)
         y = self.convert_rank_to_map_y(r)
-        self._collision_map[y][x] = tmp_p
+        col_map[y][x] = tmp_p
 
         return check
 
@@ -828,15 +838,60 @@ class AI(BaseAI):
     def passant_fen(self):
         pass
 
-    def do_move_collision_map(self, collision_map, move):
-        x = self.convert_file_to_map_x(move[1])
-        y = self.convert_rank_to_map_y(move[2])
-        from_p = collision_map[y][x]
-        collision_map[y][x] = ' '
+    def update_collision_map(self, collision_map, move):
+        # move(piece, from_file, from_rank, promotion)
 
-        x = self.convert_file_to_map_x(move[0].file)
-        y = self.convert_rank_to_map_y(move[0].rank)
-        to_p = collision_map[y][x]
+        # move from
+        x1 = self.convert_file_to_map_x(move.from_file)
+        y1 = self.convert_rank_to_map_y(move.from_rank)
+        from_p = collision_map[y1][x1]
+        collision_map[y1][x1] = ' '
+
+        # move to
+        x2 = self.convert_file_to_map_x(move.to_file)
+        y2 = self.convert_rank_to_map_y(move.to_rank)
+
+        # checking for pawn promotions
+        if move.promotion:
+            if move.promotion == "Queen":
+                if from_p.isupper():
+                    from_p = 'Q'
+                else:
+                    from_p = 'q'
+            elif move.promotion == "Rook":
+                if from_p.isupper():
+                    from_p = 'R'
+                else:
+                    from_p = 'r'
+            elif move.promotion == "Bishop":
+                if from_p.isupper():
+                    from_p = 'B'
+                else:
+                    from_p = 'b'
+            elif move.promotion == "Knight":
+                if from_p.isupper():
+                    from_p = 'N'
+                else:
+                    from_p = 'n'
+            else:
+                print("Error: could not find correct promotion for " + move[3] + ".")
+
+        collision_map[y2][x2] = from_p
+
+
+    def do_move_collision_map(self, collision_map, move):
+        # move(piece, to_file, to_rank, promotion)
+
+        # move from
+        x1 = self.convert_file_to_map_x(move[0].file)
+        y1 = self.convert_rank_to_map_y(move[0].rank)
+        from_p = collision_map[y1][x1]
+        collision_map[y1][x1] = ' '
+
+        # move to
+        x2 = self.convert_file_to_map_x(move[1])
+        y2 = self.convert_rank_to_map_y(move[2])
+        to_p = collision_map[y2][x2]
 
         # checking for pawn promotions
         if len(move) == 4 and move[3]:
@@ -863,30 +918,34 @@ class AI(BaseAI):
             else:
                 print("Error: could not find correct promotion for " + move[3] + ".")
 
-        collision_map[y][x] = from_p
+        collision_map[y2][x2] = from_p
 
         return move, to_p # returns move that was done and to_p is the character overwritten after move
 
     def undo_move_collision_map(self, collision_map, undo):
+        # move(piece, to_file, to_rank, promotion)
+
         move = undo[0]
-        to_p = undo[1] # character overwritten by move
+        prev_p = undo[1]  # character overwritten by move
 
-        x = self.convert_file_to_map_x(move[0].file)
-        y = self.convert_rank_to_map_y(move[0].rank)
-        from_p = self._collision_map[y][x]
-        collision_map[y][x] = to_p
+        # move from
+        x1 = self.convert_file_to_map_x(move[0].file)
+        y1 = self.convert_rank_to_map_y(move[0].rank)
 
-        x = self.convert_file_to_map_x(move[1])
-        y = self.convert_rank_to_map_y(move[2])
+        # move to
+        x2 = self.convert_file_to_map_x(move[1])
+        y2 = self.convert_rank_to_map_y(move[2])
+        to_p = collision_map[y2][x2]
+        collision_map[y2][x2] = prev_p
 
         # checking for promotion
         if len(move) == 4 and move[3]:
-            if from_p.isupper():
-                from_p = 'P'
+            if to_p.isupper():
+                to_p = 'P'
             else:
-                from_p = 'p'
+                to_p = 'p'
 
-        collision_map[y][x] = from_p
+        collision_map[y1][x1] = to_p
 
         return move # returns move that was just undone
 
@@ -894,11 +953,11 @@ class AI(BaseAI):
     # Des: Returns a number based on the status of the collision_map at file f and rank r.
     # Post: Returns -1 if f and r are not valid positions, 0 if the position is empty, 1 if the position contains a
     #       friendly piece, 2 if the position contains a enemies piece.
-    def check_map(self, f, r, player_obj):
+    def check_map(self, f, r, player_obj, col_map):
         if f not in "abcdefgh" or r < 1 or r > 8:
             return -1
 
-        p = self.access_map(f, r)
+        p = self.access_map(f, r, col_map)
         if p == ' ':
             return 0
         else:
@@ -914,8 +973,8 @@ class AI(BaseAI):
         return copy_col_map
 
     # Des: returns the element at file f and rank r of the collision map
-    def access_map(self, f, r):
-        return self._collision_map[self.convert_rank_to_map_y(r)][self.convert_file_to_map_x(f)]
+    def access_map(self, f, r, col_map):
+        return col_map[self.convert_rank_to_map_y(r)][self.convert_file_to_map_x(f)]
 
     def get_collision_map(self):
         return self._collision_map
@@ -938,9 +997,9 @@ class AI(BaseAI):
         return False
 
     # Des: prints the collision map
-    def print_collision_map(self):
+    def print_collision_map(self, col_map):
         k = 8
-        for x in reversed(self._collision_map):
+        for x in reversed(col_map):
             print(str(k)+"|"+str(x))
             k -= 1
         print()
