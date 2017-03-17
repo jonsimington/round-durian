@@ -58,65 +58,103 @@ class AI(BaseAI):
                   turn, False means to keep your turn going and re-call this
                   function.
         """
-
-        # getting all the possible moves and picking a random one to do
-        # self.print_collision_map()
-
+        """
         possible_moves = self.get_possible_moves(self.player.color)
         if len(possible_moves) > 0:
             shuffle(possible_moves)
             move = possible_moves[0]
-            self.output_moves([x for x in possible_moves if x[0].id == move[0].id])
+            #self.output_moves([x for x in possible_moves if x[0].id == move[0].id])
             self.do_move(move)
+        if self.terminal(self.get_collision_map(), "Min"):
+            print("\nfound terminal\n")
+        """
 
+        move = self.minimax(100, self.copy_collision_map(self.get_collision_map()))
+        self.do_move(move)
+        print(move)
         return True  # to signify we are done with our turn.
 
-    def minimax(self, depth, player_mm, collision_map):
-        if depth == 0 or self.terminal(collision_map):
-            return self.utility(player_mm, collision_map)
-
-        if player_mm == "Max":
-            self.max_value(depth, collision_map)
-        elif player_mm == "Min":
-            self.min_value(depth, collision_map)
+    def minimax(self, depth, collision_map):
+        possible_moves = self.get_possible_moves(self.max_color())
+        best_move = possible_moves[0]
+        best_score = float('-inf')
+        for move in possible_moves:
+            clone = self.copy_collision_map(collision_map)
+            undo = self.do_move_collision_map(clone, move)
+            score = self.min_value(depth - 1, clone)
+            self.undo_move_collision_map(clone, undo)
+            if score > best_score:
+                best_score = score
+                best_move = move
+            return best_move
 
     # for all possible actions, return the max of minimax(self, depth, player', collision_map')
     def max_value(self, depth, collision_map):
+        if depth == 0 or self.terminal(collision_map, "Max"):
+            return self.utility(collision_map, self.max_color())
         possible_moves = self.get_possible_moves(self.max_color())
+        best_move = possible_moves[0]
+        best_score = float('-inf')
         for move in possible_moves:
-            undo = self.do_move_collision_map(collision_map, move)
-            self.minimax(depth - 1, "Min", collision_map)
-            self.undo_move_collision_map(collision_map, undo)
-
-    def max_color(self):
-        return self.color
+            clone = self.copy_collision_map(collision_map)
+            undo = self.do_move_collision_map(clone, move)
+            score = self.min_value(depth - 1, clone)
+            self.undo_move_collision_map(clone, undo)
+            if score > best_score:
+                best_score = score
+                best_move = move
+            return best_score
 
     def min_value(self, depth, collision_map):
-        possbile_moves = self.get_possible_moves(self.min_color())
+        if depth == 0 or self.terminal(collision_map, "Max"):
+            return self.utility(collision_map, self.max_color())
+        possible_moves = self.get_possible_moves(self.max_color())
+        best_move = possible_moves[0]
+        best_score = float('inf')
+        for move in possible_moves:
+            clone = self.copy_collision_map(collision_map)
+            undo = self.do_move_collision_map(clone, move)
+            score = self.min_value(depth - 1, clone)
+            self.undo_move_collision_map(clone, undo)
+            if score < best_score:
+                best_score = score
+                best_move = move
+            return best_score
+
+    def minimax_color(self, player_mm):
+        if player_mm == "Max":
+            return self.max_color()
+        elif player_mm == "Min":
+            return self.min_color()
+
+    def max_color(self):
+        return self.player.color
 
     def min_color(self):
         player_list = [x for x in self.game.players if x.color != self.player.color]
         return player_list[0].color
 
-
-
     def result(self, collision_map, action):
         pass
 
-    def terminal(self, collision_map):
-        pass
+    def terminal(self, collision_map, player_mm):
+        if len(self.get_possible_moves(self.minimax_color(player_mm))) == 0:
+            return True
+        if self.is_draw():
+            return True
+        return False
 
-    def utility(self, collision_map, player):
-        utility = 0
+    def utility(self, collision_map, color):
+        total = 0
         for x in collision_map:
             for p in x:
-                if self.player == "Black":
+                if color == "Black":
                     if p.islower():
-                        utility += self.get_piece_value(p)
-                elif self.player == "White":
-                    if p.isupper:
-                        utility += self.get_piece_value(p)
-        return utility
+                        total += self.get_piece_value(p)
+                elif color == "White":
+                    if p.isupper():
+                        total += self.get_piece_value(p)
+        return total
 
     def get_piece_value(self, piece):
         p = piece.upper()
@@ -132,6 +170,39 @@ class AI(BaseAI):
             return 9
         elif p == 'K':
             return 0
+
+    def is_draw(self):
+        if len(self.game.moves) < 8:
+            return False
+
+        moves = self.game.moves[:8]
+        for x in moves:
+            if x.captured:
+                return False
+            if x.promotion:
+                return False
+            if x.piece.type == "Pawn":
+                return False
+
+        for i in range(4):
+            if self.is_move_equal(moves[i], moves[i + 4]) is False:
+                return False
+
+        return True
+
+    def is_move_equal(self, m1, m2):
+        if m1.piece.type != m2.piece.type:
+            return False
+        if m1.from_rank != m2.from_rank:
+            return False
+        if m1.from_file != m2.from_file:
+            return False
+        if m1.to_rank != m2.to_rank:
+            return False
+        if m1.to_file != m2.to_file:
+            return False
+        return True
+
 
     # -----------------------------Moves-------------------------
     # Des: Calls the functions that gets all the moves for each pieces and adds them into a list.
@@ -837,9 +908,10 @@ class AI(BaseAI):
                 return 1
 
     def copy_collision_map(self, col_map):
-        for x in range(len(self.get_collision_map())):
-            for y in range(len(x)):
-                col_map[y][x] = self.get_collision_map()[y][x]
+        copy_col_map = []
+        for x in col_map:
+            copy_col_map.append(x[:])
+        return copy_col_map
 
     # Des: returns the element at file f and rank r of the collision map
     def access_map(self, f, r):
