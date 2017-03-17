@@ -34,7 +34,9 @@ class AI(BaseAI):
         if len(self.game.moves) > 0:
             for x in self.game.players:
                 if x.made_move is True:
-                    self.do_move_collision_map(self.get_collision_map(), self.game.moves[-1])
+                    move = self.game.moves[-1]
+                    m = (move.piece, move.from_file, move.from_rank, move.promotion)
+                    self.do_move_collision_map(self.get_collision_map(), m)
 
     def end(self, won, reason):
         """ This is called when the game ends, you can clean up your data and
@@ -756,39 +758,39 @@ class AI(BaseAI):
         pass
 
     def do_move_collision_map(self, collision_map, move):
-        x = self.convert_file_to_map_x(move.from_file)
-        y = self.convert_rank_to_map_y(move.from_rank)
+        x = self.convert_file_to_map_x(move[1])
+        y = self.convert_rank_to_map_y(move[2])
         from_p = collision_map[y][x]
         collision_map[y][x] = ' '
 
-        x = self.convert_file_to_map_x(move.piece.file)
-        y = self.convert_rank_to_map_y(move.piece.rank)
+        x = self.convert_file_to_map_x(move[0].file)
+        y = self.convert_rank_to_map_y(move[0].rank)
         to_p = collision_map[y][x]
 
         # checking for pawn promotions
-        if move.promotion:
-            if move.promotion == "Queen":
+        if len(move) == 4 and move[3]:
+            if move[3] == "Queen":
                 if from_p.isupper():
                     from_p = 'Q'
                 else:
                     from_p = 'q'
-            elif move.promotion == "Rook":
+            elif move[3] == "Rook":
                 if from_p.isupper():
                     from_p = 'R'
                 else:
                     from_p = 'r'
-            elif move.promotion == "Bishop":
+            elif move[3] == "Bishop":
                 if from_p.isupper():
                     from_p = 'B'
                 else:
                     from_p = 'b'
-            elif move.promotion == "Knight":
+            elif move[3] == "Knight":
                 if from_p.isupper():
                     from_p = 'N'
                 else:
                     from_p = 'n'
             else:
-                print("Error: could not find correct promotion for " + move.promotion + ".")
+                print("Error: could not find correct promotion for " + move[3] + ".")
 
         collision_map[y][x] = from_p
 
@@ -798,16 +800,16 @@ class AI(BaseAI):
         move = undo[0]
         to_p = undo[1] # character overwritten by move
 
-        x = self.convert_file_to_map_x(move.piece.file)
-        y = self.convert_rank_to_map_y(move.piece.rank)
+        x = self.convert_file_to_map_x(move[0].file)
+        y = self.convert_rank_to_map_y(move[0].rank)
         from_p = self._collision_map[y][x]
         collision_map[y][x] = to_p
 
-        x = self.convert_file_to_map_x(move.from_file)
-        y = self.convert_rank_to_map_y(move.from_rank)
+        x = self.convert_file_to_map_x(move[1])
+        y = self.convert_rank_to_map_y(move[2])
 
         # checking for promotion
-        if move.promotion:
+        if len(move) == 4 and move[3]:
             if from_p.isupper():
                 from_p = 'P'
             else:
