@@ -3,6 +3,9 @@
 from joueur.base_ai import BaseAI
 from random import shuffle
 
+import cProfile
+import profile
+
 
 class AI(BaseAI):
     """ The basic AI functions that are the same between games. """
@@ -56,21 +59,14 @@ class AI(BaseAI):
                   turn, False means to keep your turn going and re-call this
                   function.
         """
-        """
-        possible_moves = self.get_possible_moves(self.player.color)
-        if len(possible_moves) > 0:
-            shuffle(possible_moves)
-            move = possible_moves[0]
-            #self.output_moves([x for x in possible_moves if x[0].id == move[0].id])
-            self.do_move(move)
-        if self.terminal(self.get_collision_map(), "Min"):
-            print("\nfound terminal\n")
-        """
-
-        move = self.minimax(2, self.copy_collision_map(self.get_collision_map()))
+        #cProfile.runctx('self.minimax(2, self.copy_collision_map(self.get_collision_map()))', globals(), locals())
+        move = self.minimax(2, self.get_collision_map())
         self.do_move(move)
         print(move)
         return True  # to signify we are done with our turn.
+
+    def test(self, x):
+        return x
 
     def minimax(self, depth, col_map):
         possible_moves = self.get_possible_moves(self.max_color(), col_map)
@@ -78,8 +74,7 @@ class AI(BaseAI):
         best_score = float('-inf')
         for move in possible_moves:
             undo = self.do_move_collision_map(col_map, move)
-            score = self.utility(col_map, "Max")
-            #score = self.min_value(depth - 1, clone)
+            score = self.min_value(depth - 1, col_map)
             self.undo_move_collision_map(col_map, undo)
             if score > best_score:
                 best_score = score
@@ -87,37 +82,31 @@ class AI(BaseAI):
         return best_move
 
     # for all possible actions, return the max of minimax(self, depth, player', collision_map')
-    def max_value(self, depth, collision_map):
-        if depth == 0 or self.terminal(collision_map, "Max"):
-            return self.utility(collision_map, self.max_color())
-        possible_moves = self.get_possible_moves(self.max_color())
-        best_move = possible_moves[0]
+    def max_value(self, depth, col_map):
+        if depth == 0:
+            return self.utility(col_map, "Min")
+        possible_moves = self.get_possible_moves(self.max_color(), col_map)
         best_score = float('-inf')
         for move in possible_moves:
-            clone = self.copy_collision_map(collision_map)
-            undo = self.do_move_collision_map(clone, move)
-            score = self.min_value(depth - 1, clone)
-            self.undo_move_collision_map(clone, undo)
+            undo = self.do_move_collision_map(col_map, move)
+            score = self.min_value(depth - 1, col_map)
+            self.undo_move_collision_map(col_map, undo)
             if score > best_score:
                 best_score = score
-                best_move = move
-            return best_score
+        return best_score
 
-    def min_value(self, depth, collision_map):
-        if depth == 0 or self.terminal(collision_map, "Max"):
-            return self.utility(collision_map, self.max_color())
-        possible_moves = self.get_possible_moves(self.max_color())
-        best_move = possible_moves[0]
+    def min_value(self, depth, col_map):
+        if depth == 0:
+            return self.utility(col_map, "Max")
+        possible_moves = self.get_possible_moves(self.max_color(), col_map)
         best_score = float('inf')
         for move in possible_moves:
-            clone = self.copy_collision_map(collision_map)
-            undo = self.do_move_collision_map(clone, move)
-            score = self.min_value(depth - 1, clone)
-            self.undo_move_collision_map(clone, undo)
+            undo = self.do_move_collision_map(col_map, move)
+            score = self.min_value(depth - 1, col_map)
+            self.undo_move_collision_map(col_map, undo)
             if score < best_score:
                 best_score = score
-                best_move = move
-            return best_score
+        return best_score
 
     def minimax_color(self, player_mm):
         if player_mm == "Max":
@@ -136,8 +125,6 @@ class AI(BaseAI):
         pass
 
     def terminal(self, col_map, player_mm):
-        if len(self.get_possible_moves(self.minimax_color(player_mm), col_map)) == 0:
-            return True
         if self.is_draw():
             return True
         return False
@@ -151,18 +138,11 @@ class AI(BaseAI):
                         total += self.get_piece_value(p)
                     elif p.isupper():
                         total -= self.get_piece_value(p)
-                elif self.minimax_color(player_mm) == "White":
-                    if p.isupper():
-                        total += self.get_piece_value(p)
-                    elif p.islower():
+                if self.minimax_color(player_mm) == "White":
+                    if p.islower():
                         total -= self.get_piece_value(p)
-
-        if self.minimax_color(player_mm) == "Black":
-            total += len(self.get_possible_moves("Black", col_map))
-            total -= len(self.get_possible_moves("White", col_map))
-        elif self.minimax_color(player_mm) == "White":
-            total += len(self.get_possible_moves("White", col_map))
-            total -= len(self.get_possible_moves("Black", col_map))
+                    elif p.isupper():
+                        total += self.get_piece_value(p)
 
         return total
 
@@ -223,28 +203,26 @@ class AI(BaseAI):
         player_obj = player_list[0]
 
         moves = []
-        moves += self.get_pawn_moves(player_obj, col_map)
-        moves += self.get_rook_moves(player_obj, col_map)
-        moves += self.get_knight_moves(player_obj, col_map)
-        moves += self.get_bishop_moves(player_obj, col_map)
-        moves += self.get_queen_moves(player_obj, col_map)
-        moves += self.get_king_moves(player_obj, col_map)
+
+        for p in player_obj.pieces:
+            if p.type == "Pawn":
+                moves.extend(self.get_moves_for_pawn(p, player_obj, col_map))
+            elif p.type == "Rook":
+                moves.extend(self.get_moves_for_rook(p, player_obj, col_map))
+            elif p.type == "Bishop":
+                moves.extend(self.get_moves_for_bishop(p, player_obj, col_map))
+            elif p.type == "Knight":
+                moves.extend(self.get_moves_for_knight(p, player_obj, col_map))
+            elif p.type == "Queen":
+                moves.extend(self.get_moves_for_queen(p, player_obj, col_map))
+            elif p.type == "King":
+                moves.extend(self.get_moves_for_king(p, player_obj, col_map))
+            else:
+                print("Error: Didn't recognize piece of type "+p.type+'.')
 
         return moves
 
     # ----------------------------Pawns----------------------------
-    # Des: Loops through all pawns and gets the possible moves for each pawn.
-    # Pre: None
-    # Post: list of pawn moves returned
-    def get_pawn_moves(self, player_obj, col_map):
-        pawns = [x for x in player_obj.pieces if x.type == "Pawn"]
-        pawn_moves = []
-
-        for pawn in pawns:
-            pawn_moves += self.get_moves_for_pawn(pawn, player_obj, col_map)
-
-        return pawn_moves
-
     # Des: Gets the possible moves for a specific pawn
     # Pre: None
     # Post: returns list of moves for the pawn passed
@@ -339,17 +317,14 @@ class AI(BaseAI):
 
     # ------------------------Rooks---------------------------------
     # Des: gets all the moves for the rooks and returns them in a list
-    def get_rook_moves(self, player_obj, col_map):
-        rooks = [x for x in player_obj.pieces if x.type == "Rook"]
+    def get_moves_for_rook(self, r, player_obj, col_map):
         rook_moves = []
 
-        # loops through all rooks
-        for r in rooks:
-            rook_moves += self.get_moves_in_direction(r, 'U', player_obj, col_map)
-            rook_moves += self.get_moves_in_direction(r, 'D', player_obj, col_map)
-            rook_moves += self.get_moves_in_direction(r, 'L', player_obj, col_map)
-            rook_moves += self.get_moves_in_direction(r, 'R', player_obj, col_map)
-            rook_moves += self.get_castle_moves(r, player_obj, col_map)
+        rook_moves.extend(self.get_moves_in_direction(r, 'U', player_obj, col_map))
+        rook_moves.extend(self.get_moves_in_direction(r, 'D', player_obj, col_map))
+        rook_moves.extend(self.get_moves_in_direction(r, 'L', player_obj, col_map))
+        rook_moves.extend(self.get_moves_in_direction(r, 'R', player_obj, col_map))
+        rook_moves.extend(self.get_castle_moves(r, player_obj, col_map))
 
         return rook_moves
 
@@ -411,16 +386,6 @@ class AI(BaseAI):
             return self.inc_char(k.file, 2)
 
     # -------------------------Knights--------------------------------
-    # Des: loops through all knighs and returns the possible moves
-    def get_knight_moves(self, player_obj, col_map):
-        knights = [x for x in player_obj.pieces if x.type == "Knight"]
-        knight_moves = []
-
-        for k in knights:
-            knight_moves += self.get_moves_for_knight(k, player_obj, col_map)
-
-        return knight_moves
-
     # Des: returns the possible moves for a knight
     def get_moves_for_knight(self, k, player_obj, col_map):
         moves = []
@@ -467,48 +432,33 @@ class AI(BaseAI):
 
     # -----------------------------Bishops------------------------------
     # Des: returns a list of possible moves for all bishops.
-    def get_bishop_moves(self, player_obj, col_map):
-        bishops = [x for x in player_obj.pieces if x.type == "Bishop"]
+    def get_moves_for_bishop(self, b, player_obj, col_map):
         bishop_moves = []
 
-        for b in bishops:
-            bishop_moves += self.get_moves_in_direction(b, 'UL', player_obj, col_map)
-            bishop_moves += self.get_moves_in_direction(b, 'UR', player_obj, col_map)
-            bishop_moves += self.get_moves_in_direction(b, 'DL', player_obj, col_map)
-            bishop_moves += self.get_moves_in_direction(b, 'DR', player_obj, col_map)
+        bishop_moves.extend(self.get_moves_in_direction(b, 'UL', player_obj, col_map))
+        bishop_moves.extend(self.get_moves_in_direction(b, 'UR', player_obj, col_map))
+        bishop_moves.extend(self.get_moves_in_direction(b, 'DL', player_obj, col_map))
+        bishop_moves.extend(self.get_moves_in_direction(b, 'DR', player_obj, col_map))
 
         return bishop_moves
 
     # ---------------------------------Queen-----------------------------
     # Des: returns a list of possible moves for all queens.
-    def get_queen_moves(self, player_obj, col_map):
-        queens = [x for x in player_obj.pieces if x.type == "Queen"]
+    def get_moves_for_queen(self, q, player_obj, col_map):
         queen_moves = []
 
-        for q in queens:
-            queen_moves += self.get_moves_in_direction(q, 'U', player_obj, col_map)
-            queen_moves += self.get_moves_in_direction(q, 'D', player_obj, col_map)
-            queen_moves += self.get_moves_in_direction(q, 'L', player_obj, col_map)
-            queen_moves += self.get_moves_in_direction(q, 'R', player_obj, col_map)
-            queen_moves += self.get_moves_in_direction(q, 'UL', player_obj, col_map)
-            queen_moves += self.get_moves_in_direction(q, 'UR', player_obj, col_map)
-            queen_moves += self.get_moves_in_direction(q, 'DL', player_obj, col_map)
-            queen_moves += self.get_moves_in_direction(q, 'DR', player_obj, col_map)
+        queen_moves.extend(self.get_moves_in_direction(q, 'U', player_obj, col_map))
+        queen_moves.extend(self.get_moves_in_direction(q, 'D', player_obj, col_map))
+        queen_moves.extend(self.get_moves_in_direction(q, 'L', player_obj, col_map))
+        queen_moves.extend(self.get_moves_in_direction(q, 'R', player_obj, col_map))
+        queen_moves.extend(self.get_moves_in_direction(q, 'UL', player_obj, col_map))
+        queen_moves.extend(self.get_moves_in_direction(q, 'UR', player_obj, col_map))
+        queen_moves.extend(self.get_moves_in_direction(q, 'DL', player_obj, col_map))
+        queen_moves.extend(self.get_moves_in_direction(q, 'DR', player_obj, col_map))
 
         return queen_moves
 
     # -----------------------------King--------------------------
-    # Des: returns a list of all possible moves for the kings
-    def get_king_moves(self, player_obj, col_map):
-        kings = [x for x in player_obj.pieces if x.type == "King"]
-        king_moves = []
-
-        # looping through kings
-        for k in kings:
-            king_moves += self.get_moves_for_king(k, player_obj, col_map)
-
-        return king_moves
-
     # Des: returns a list of all possible moves for a king
     def get_moves_for_king(self, k, player_obj, col_map):
         moves = []
