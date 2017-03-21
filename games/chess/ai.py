@@ -3,10 +3,6 @@
 from joueur.base_ai import BaseAI
 from random import shuffle
 
-import cProfile
-import profile
-
-
 class AI(BaseAI):
     """ The basic AI functions that are the same between games. """
 
@@ -59,7 +55,6 @@ class AI(BaseAI):
                   turn, False means to keep your turn going and re-call this
                   function.
         """
-        #cProfile.runctx('self.minimax(2, self.copy_collision_map(self.get_collision_map()))', globals(), locals())
         move = self.minimax(2, self.get_collision_map())
         self.do_move(move)
         print(move)
@@ -68,10 +63,12 @@ class AI(BaseAI):
     def test(self, x):
         return x
 
+    # Des: minimax function
     def minimax(self, depth, col_map):
-        possible_moves = self.get_possible_moves(self.max_color(), col_map)
-        best_move = possible_moves[0]
+        possible_moves = self.get_possible_moves(self.player.color, col_map)
+        best_move = ()
         best_score = float('-inf')
+
         for move in possible_moves:
             undo = self.do_move_collision_map(col_map, move)
             score = self.min_value(depth - 1, col_map)
@@ -81,10 +78,11 @@ class AI(BaseAI):
                 best_move = move
         return best_move
 
-    # for all possible actions, return the max of minimax(self, depth, player', collision_map')
+    # Des: returns the max value possible for all moves
     def max_value(self, depth, col_map):
-        if depth == 0:
-            return self.utility(col_map, "Min")
+        if depth <= 0 or self.is_terminal():
+            return self.utility(col_map)
+
         possible_moves = self.get_possible_moves(self.max_color(), col_map)
         best_score = float('-inf')
         for move in possible_moves:
@@ -95,9 +93,11 @@ class AI(BaseAI):
                 best_score = score
         return best_score
 
+    # Des: returns the min value possible for all moves
     def min_value(self, depth, col_map):
-        if depth == 0:
-            return self.utility(col_map, "Max")
+        if depth <= 0 or self.is_terminal():
+            return self.utility(col_map)
+
         possible_moves = self.get_possible_moves(self.max_color(), col_map)
         best_score = float('inf')
         for move in possible_moves:
@@ -121,28 +121,38 @@ class AI(BaseAI):
         player_list = [x for x in self.game.players if x.color != self.player.color]
         return player_list[0].color
 
-    def result(self, collision_map, action):
-        pass
+    def get_opponent_player(self):
+        player_list = [x for x in self.game.players if x.color == self.player.color]
+        return player_list[0]
 
-    def terminal(self, col_map, player_mm):
+    def is_terminal(self):
         if self.is_draw():
             return True
         return False
 
-    def utility(self, col_map, player_mm):
+    # Des: returns the utility value of a game state
+    def utility(self, col_map):
         total = 0
+        white_sign = 1
+        black_sign = 1
+
+        # Determining how to sum utility
+        if self.player.color == "White":
+            black_sign = -1
+        else:
+            white_sign = -1
+
         for x in col_map:
             for p in x:
-                if self.minimax_color(player_mm) == "Black":
-                    if p.islower():
-                        total += self.get_piece_value(p)
-                    elif p.isupper():
-                        total -= self.get_piece_value(p)
-                if self.minimax_color(player_mm) == "White":
-                    if p.islower():
-                        total -= self.get_piece_value(p)
-                    elif p.isupper():
-                        total += self.get_piece_value(p)
+                if p.islower():
+                    total += self.get_piece_value(p) * black_sign
+                elif p.isupper():
+                    total += self.get_piece_value(p) * white_sign
+
+        if self.is_check(self.get_opponent_player(), col_map):
+            total += 10
+        if self.is_check(self.player, col_map):
+            total -= 10
 
         return total
 
@@ -161,6 +171,7 @@ class AI(BaseAI):
         elif p == 'K':
             return 0
 
+    # Des: checks if a game state is in a draw
     def is_draw(self):
         if len(self.game.moves) < 8:
             return False
@@ -180,6 +191,7 @@ class AI(BaseAI):
 
         return True
 
+    # Des: checks of two moves are equal
     def is_move_equal(self, m1, m2):
         if m1.piece.type != m2.piece.type:
             return False
@@ -220,6 +232,7 @@ class AI(BaseAI):
             else:
                 print("Error: Didn't recognize piece of type "+p.type+'.')
 
+        shuffle(moves)
         return moves
 
     # ----------------------------Pawns----------------------------
@@ -726,6 +739,7 @@ class AI(BaseAI):
             # checking if the king can be attacked
             if self.check_attack(k.file, k.rank, player_obj, col_map):
                 return True
+        return False
 
     # Des: determines if a move will cause the player's king to be checked
     def move_cause_check(self, piece, f, r, player_obj, col_map):
