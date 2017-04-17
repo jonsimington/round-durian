@@ -3,6 +3,7 @@
 from joueur.base_ai import BaseAI
 from random import shuffle
 import datetime
+import bisect
 
 class AI(BaseAI):
     """ The basic AI functions that are the same between games. """
@@ -57,7 +58,7 @@ class AI(BaseAI):
                   function.
         """
 
-        move = self.tliddl_minimax(10, 2, 5)
+        move = self.tliddl_minimax(3, 2, 2)
         print(move)
         self.do_move(move)
         return True  # to signify we are done with our turn.
@@ -90,9 +91,11 @@ class AI(BaseAI):
         alpha = float('-inf')
         beta = float('inf')
 
+        possible_moves = self.sort_moves(possible_moves, col_map, history_table)
         for move in possible_moves:
+            move = move[0]
             undo = self.do_move_collision_map(col_map, move)
-            score = self.min_value(depth - 1, q_depth, col_map, alpha, beta, history_table)
+            score = self.min_value(depth - 1, q_depth, col_map, alpha, beta, self.utility(col_map), history_table)
             self.undo_move_collision_map(col_map, undo)
 
             # fail low
@@ -103,19 +106,32 @@ class AI(BaseAI):
                 best_score = score
                 best_move = move
 
+        # add changes to history table
+        self.update_history(best_move, col_map, history_table)
         return best_move
 
     # Des: returns the max value possible for all moves
-    def max_value(self, depth, q_depth, col_map, alpha, beta, history_table):
-        if depth <= 0 or self.is_terminal():
-            return self.utility(col_map)
-
+    def max_value(self, depth, q_depth, col_map, alpha, beta, utility_value, history_table):
         possible_moves = self.get_possible_moves(self.player, col_map)
+        best_move = ()
         best_score = float('-inf')
 
+        q_bool = self.is_quiescence(self.utility(col_map), utility_value, depth, q_depth)
+
+        if len(possible_moves) == 0 or depth <= 0 and q_bool is False:
+            return self.utility(col_map)
+
+        d = 1
+        q = 0
+        if q_bool:
+            d = 0
+            q = 1
+
+        possible_moves = self.sort_moves(possible_moves, col_map, history_table)
         for move in possible_moves:
+            move = move[0]
             undo = self.do_move_collision_map(col_map, move)
-            score = self.min_value(depth - 1, q_depth, col_map, alpha, beta, history_table)
+            score = self.min_value(depth - d, q_depth - q, col_map, alpha, beta, self.utility(col_map), history_table)
             self.undo_move_collision_map(col_map, undo)
 
             # fail high
@@ -124,19 +140,34 @@ class AI(BaseAI):
             if score > best_score:
                 alpha = score
                 best_score = score
+                best_move = move
+
+        # add changes to history table
+        self.update_history(best_move, col_map, history_table)
         return best_score
 
     # Des: returns the min value possible for all moves
-    def min_value(self, depth, q_depth, col_map, alpha, beta, history_table):
-        if depth <= 0 or self.is_terminal():
-            return self.utility(col_map)
-
+    def min_value(self, depth, q_depth, col_map, alpha, beta, utility_value, history_table):
         possible_moves = self.get_possible_moves(self.get_opponent_player(), col_map)
+        best_move = ()
         best_score = float('inf')
 
+        q_bool = self.is_quiescence(self.utility(col_map), utility_value, depth, q_depth)
+
+        if len(possible_moves) == 0 or depth <= 0 and q_bool is False:
+            return self.utility(col_map)
+
+        d = 1
+        q = 0
+        if q_bool:
+            d = 0
+            q = 1
+
+        possible_moves = self.sort_moves(possible_moves, col_map, history_table)
         for move in possible_moves:
+            move = move[0]
             undo = self.do_move_collision_map(col_map, move)
-            score = self.max_value(depth - 1, q_depth, col_map, alpha, beta, history_table)
+            score = self.max_value(depth - d, q_depth - q, col_map, alpha, beta, self.utility(col_map), history_table)
             self.undo_move_collision_map(col_map, undo)
 
             # fail low
@@ -145,7 +176,36 @@ class AI(BaseAI):
             if score < best_score:
                 beta = score
                 best_score = score
+                best_move = move
+
+        # add changes to history table
+        self.update_history(best_move, col_map, history_table)
         return best_score
+
+    def sort_moves(self, possible_moves, col_map, history_table):
+        moves = []
+
+        for move in possible_moves:
+            hash_key = hash(str(col_map) + str(move))
+            if hash_key in history_table:
+                moves.append((move, history_table[hash_key]))
+            else:
+                moves.append((move, 0))
+
+        sorted(moves, key=lambda x: x[1])
+        return moves
+
+    def update_history(self, best_move, col_map, history_table):
+        hash_key = hash(str(col_map) + str(best_move))
+        if hash_key in history_table:
+            history_table[hash_key] += 1
+        else:
+            history_table[hash_key] = 1
+
+    def is_quiescence(self, utility_value, prev_utility_value, depth, q_depth):
+        if utility_value != prev_utility_value and depth == 0 and q_depth > 0:
+            return True
+        return False
 
     def minimax_color(self, player_mm):
         if player_mm == "Max":
@@ -178,7 +238,7 @@ class AI(BaseAI):
         # Determining how to sum utility
         if self.player.color == "White":
             black_sign = -1
-        else:
+        elif self.player.color == "Black":
             white_sign = -1
 
         for x in col_map:
@@ -188,15 +248,17 @@ class AI(BaseAI):
                 elif p.isupper():
                     total += self.get_piece_value(p) * white_sign
 
+        player_moves = self.get_possible_moves(self.player, col_map)
+        opponent_moves = self.get_possible_moves(self.get_opponent_player(), col_map)
+
         if self.is_check(self.get_opponent_player(), col_map):
             total += 10
         if self.is_check(self.player, col_map):
             total -= 10
-        if self.is_draw():
+        if len(player_moves) == 0:
             total += 50
-        # is opponet in chekcmate
-        elif self.get_possible_moves(self.get_opponent_player(), col_map) is 0:
-            total += 100
+        if len(opponent_moves) == 0:
+            total -= 50
 
         return total
 
@@ -213,8 +275,7 @@ class AI(BaseAI):
             return 5
         elif p == 'Q':
             return 9
-        elif p == 'K':
-            return 0
+        return 0
 
     def is_draw(self):
         col_map = self.get_collision_map()
