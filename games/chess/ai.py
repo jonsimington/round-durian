@@ -2,6 +2,7 @@
 
 from joueur.base_ai import BaseAI
 from random import shuffle
+import datetime
 
 class AI(BaseAI):
     """ The basic AI functions that are the same between games. """
@@ -55,56 +56,94 @@ class AI(BaseAI):
                   turn, False means to keep your turn going and re-call this
                   function.
         """
-        move = self.minimax(2, self.get_collision_map())
-        self.do_move(move)
+
+        move = self.tliddl_minimax(10, 2, 5)
         print(move)
+        self.do_move(move)
         return True  # to signify we are done with our turn.
 
-    def test(self, x):
-        return x
+    # Des: Runs the Time-Limited Iterative-Deepening Depth-Limited MiniMax function.  First parameter is the depth
+    #      limit, second is the quiescence depth limit, and the third is the time limit (sec).
+    # Pre: depth_limit must be > 0, time_limit must be > 0.
+    def tliddl_minimax(self, depth_limit, q_depth_limit, time_limit):
+        history_table = {}
 
-    # Des: minimax function
-    def minimax(self, depth, col_map):
-        possible_moves = self.get_possible_moves(self.player.color, col_map)
+        # finding the end time value to exit the loop
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=time_limit)
+
+        move = ()
+        i = 1
+        while i <= depth_limit and end_time > datetime.datetime.now():
+            move = self.minimax_ab(i, q_depth_limit, history_table)
+            i += 1
+
+        return move
+
+    # Des: minimax function with alpha beta pruning
+    # Pre: depth must be > 0
+    def minimax_ab(self, depth, q_depth, history_table):
+        col_map = self.get_collision_map()
+        possible_moves = self.get_possible_moves(self.player, col_map)
         best_move = ()
         best_score = float('-inf')
 
+        alpha = float('-inf')
+        beta = float('inf')
+
         for move in possible_moves:
             undo = self.do_move_collision_map(col_map, move)
-            score = self.min_value(depth - 1, col_map)
+            score = self.min_value(depth - 1, q_depth, col_map, alpha, beta, history_table)
             self.undo_move_collision_map(col_map, undo)
+
+            # fail low
+            if score >= beta:
+                return best_move
             if score > best_score:
+                alpha = score
                 best_score = score
                 best_move = move
+
         return best_move
 
     # Des: returns the max value possible for all moves
-    def max_value(self, depth, col_map):
+    def max_value(self, depth, q_depth, col_map, alpha, beta, history_table):
         if depth <= 0 or self.is_terminal():
             return self.utility(col_map)
 
-        possible_moves = self.get_possible_moves(self.max_color(), col_map)
+        possible_moves = self.get_possible_moves(self.player, col_map)
         best_score = float('-inf')
+
         for move in possible_moves:
             undo = self.do_move_collision_map(col_map, move)
-            score = self.min_value(depth - 1, col_map)
+            score = self.min_value(depth - 1, q_depth, col_map, alpha, beta, history_table)
             self.undo_move_collision_map(col_map, undo)
+
+            # fail high
+            if score >= beta:
+                return best_score
             if score > best_score:
+                alpha = score
                 best_score = score
         return best_score
 
     # Des: returns the min value possible for all moves
-    def min_value(self, depth, col_map):
+    def min_value(self, depth, q_depth, col_map, alpha, beta, history_table):
         if depth <= 0 or self.is_terminal():
             return self.utility(col_map)
 
-        possible_moves = self.get_possible_moves(self.max_color(), col_map)
+        possible_moves = self.get_possible_moves(self.get_opponent_player(), col_map)
         best_score = float('inf')
+
         for move in possible_moves:
             undo = self.do_move_collision_map(col_map, move)
-            score = self.min_value(depth - 1, col_map)
+            score = self.max_value(depth - 1, q_depth, col_map, alpha, beta, history_table)
             self.undo_move_collision_map(col_map, undo)
+
+            # fail low
+            if score <= alpha:
+                return best_score
             if score < best_score:
+                beta = score
                 best_score = score
         return best_score
 
@@ -122,7 +161,7 @@ class AI(BaseAI):
         return player_list[0].color
 
     def get_opponent_player(self):
-        player_list = [x for x in self.game.players if x.color == self.player.color]
+        player_list = [x for x in self.game.players if x.color != self.player.color]
         return player_list[0]
 
     def is_terminal(self):
@@ -153,8 +192,14 @@ class AI(BaseAI):
             total += 10
         if self.is_check(self.player, col_map):
             total -= 10
+        if self.is_draw():
+            total += 50
+        # is opponet in chekcmate
+        elif self.get_possible_moves(self.get_opponent_player(), col_map) is 0:
+            total += 100
 
         return total
+
 
     def get_piece_value(self, piece):
         p = piece.upper()
@@ -171,8 +216,26 @@ class AI(BaseAI):
         elif p == 'K':
             return 0
 
-    # Des: checks if a game state is in a draw
     def is_draw(self):
+        col_map = self.get_collision_map()
+        white_pieces = self.get_white_pieces(col_map)
+        black_pieces = self.get_black_pieces(col_map)
+
+        if self.is_draw_repitition():
+            return True
+        elif self.is_draw_k_vs_k(col_map, white_pieces, black_pieces):
+            return True
+        elif self.is_draw_k_vs_k(col_map, white_pieces, black_pieces):
+            return True
+        elif self.is_draw_k_vs_k(col_map, white_pieces, black_pieces):
+            return True
+        elif self.is_draw_kb_vs_kb(col_map, white_pieces, black_pieces):
+            return True
+
+        return False
+
+    # Des: checks if a game state is in a draw
+    def is_draw_repitition(self):
         if len(self.game.moves) < 8:
             return False
 
@@ -188,6 +251,74 @@ class AI(BaseAI):
         for i in range(4):
             if self.is_move_equal(moves[i], moves[i + 4]) is False:
                 return False
+
+        return True
+
+    def get_white_pieces(self, col_map):
+        list = []
+        for x in col_map:
+            for y in x:
+                if y.isupper():
+                    list.append(y)
+        return list
+
+    def get_black_pieces(self, col_map):
+        list = []
+        for x in col_map:
+            for y in x:
+                if y.islower():
+                    list.append(y)
+        return list
+
+    def is_draw_k_vs_k(self, col_map, white_pieces, black_pieces):
+
+
+        # king against king
+        if len(white_pieces) == 1 and len(black_pieces) == 1:
+            return True
+
+        return False
+
+    def is_draw_k_vs_kb_or_kn(self, col_map, white_pieces, black_pieces):
+        if len(white_pieces) != 1 or len(black_pieces) != 2:
+            return False
+        for p in black_pieces:
+            if p.upper() != 'K' and p.upper() != 'B' and p.upper() != 'N':
+                return False
+        return True
+
+    def is_draw_kb_or_kn_vs_k(self, col_map, white_pieces, black_pieces):
+        if len(black_pieces) != 1 or len(white_pieces) != 2:
+            return False
+        for p in white_pieces:
+            if p.upper() != 'K' and p.upper() != 'B' and p.upper() != 'N':
+                return False
+        return True
+
+    def is_draw_kb_vs_kb(self, col_map, white_pieces, black_pieces):
+        if len(white_pieces) != 2 or len(black_pieces) != 2:
+            return False
+        for p in white_pieces:
+            if p.upper() != 'K' and p.upper() != 'B':
+                return False
+        for p in black_pieces:
+            if p.upper() != 'K' and p.upper() != 'B':
+                return False
+
+        bishop1_rank = 0
+        bishop2_rank = 0
+
+        for x in range(len(col_map)):
+            for y in range(x):
+                if col_map[y][x].is_upper():
+                    bishop1_rank = x
+                if col_map[y][x].is_lower():
+                    bishop2_rank = x
+
+        if bishop1_rank % 2 != 0 and bishop2_rank % 2 == 0:
+            return False
+        if bishop1_rank % 2 == 0 and bishop2_rank % 2 != 0:
+            return False
 
         return True
 
@@ -210,10 +341,7 @@ class AI(BaseAI):
     # Des: Calls the functions that gets all the moves for each pieces and adds them into a list.
     # Pre: None
     # Post: list of moves returns that contains a tuple of the piece, the file, and the rank.
-    def get_possible_moves(self, player_color, col_map):
-        player_list = [x for x in self.game.players if x.color == player_color]
-        player_obj = player_list[0]
-
+    def get_possible_moves(self, player_obj, col_map):
         moves = []
 
         for p in player_obj.pieces:
@@ -503,12 +631,22 @@ class AI(BaseAI):
                 x = self.dec_char(x)
                 y += 1
 
-            # is position empty or does it contain an enemy?
+            # is position empty?
             m = self.check_map(x, y, player_obj, col_map)
-            if m == 0 or m == 2:
+            if m == 0:
                 # can the king be attacked from this position?
+                undo = self.do_move_collision_map(col_map, (k, x, y))
                 if self.check_attack(x, y, player_obj, col_map) is False:
                     moves.append((k, x, y))
+                self.undo_move_collision_map(col_map, undo)
+            # is position occupied by enemy piece?
+            if m == 2:
+                map_p = self.access_map(x, y, col_map).upper()
+                if map_p != 'k' and map_p != 'K':
+                    undo = self.do_move_collision_map(col_map, (k, x, y))
+                    if self.check_attack(x, y, player_obj, col_map) is False:
+                        moves.append((k, x, y))
+                    self.undo_move_collision_map(col_map, undo)
 
         return moves
 
@@ -582,21 +720,20 @@ class AI(BaseAI):
                 x = self.inc_char(x)
 
             m = self.check_map(x, y, player_obj, col_map)
+
             # is (x, y) on the board?
-            if m != -1:
-                p = self.access_map(x, y, col_map)
-                # print("    (" + str(i) + ") " + x + str(y) + ": " + p + ": " + str(self.is_enemy(p)))
+            if m == -1:
+                return False
+            # is the space empty?
+            if m == 0:
+                continue
             # does (x, y) contain a friendly?
-            if m == 1:
-                p = self.access_map(x, y, col_map)
-                # skip over king
-                if p in ['K', 'k']:
-                    continue
-                else:
-                    return False
+            elif m == 1:
+                return False
             # does (x, y) contain a enemy?
             elif m == 2:
                 p = self.access_map(x, y, col_map)
+
                 # if d is a straight direction (U, D, L, R)
                 if d in straight_dir:
                     # can straight moving pieces with reach of 1 attack?
@@ -604,23 +741,23 @@ class AI(BaseAI):
                         # print("      Return True")
                         return True
                     # can straight moving pieces attack?
-                    if p in straight_pieces:
+                    elif p in straight_pieces:
                         # print("      Return True")
                         return True
                     else:
                         return False
 
-                # if d is a diagonal direction (UL, UR, DL, UR)
+                # if d is a diagonal direction (UL, UR, DL, DR)
                 elif d in diagonal_dir:
                     # can diagonally moving pieces with reach of 1 attack?
                     if i == 1 and p in diagonal_pieces_1:
                         # print("      Return True")
                         return True
                     # can pawns attack?
-                    if i == 1 and d in pawn_attack and p in diagonal_exception:
+                    elif i == 1 and d in pawn_attack and p in diagonal_exception:
                         return True
                     # can diagonally moving pieces attack?
-                    if p in diagonal_pieces:
+                    elif p in diagonal_pieces:
                         # print("      Return True")
                         return True
                     else:
@@ -842,7 +979,6 @@ class AI(BaseAI):
 
         collision_map[y2][x2] = from_p
 
-
     def do_move_collision_map(self, collision_map, move):
         # move(piece, to_file, to_rank, promotion)
 
@@ -966,7 +1102,7 @@ class AI(BaseAI):
         for x in reversed(col_map):
             print(str(k)+"|"+str(x))
             k -= 1
-        print()
+        print("    a    b    c    d    e    f    g    h")
 
     # Des: returns the number of spaces between file f and rank r and the edge of the board in direction d.
     def get_spaces_from_point(self, f, r, d):
